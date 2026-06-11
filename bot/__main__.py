@@ -15,12 +15,19 @@ from .cycle import tick
 
 def main() -> None:
     print(f"[bot] booted. wallet={config.WALLET_PUBKEY}  mint={config.LOYALTY_MINT}")
+    print(f"[bot] DRY_RUN={'ON (build-only, nothing signed)' if config.DRY_RUN else 'off (LIVE MONEY)'}")
     print(
-        f"[bot] cadence cycle={config.CYCLE_INTERVAL_SECONDS}s  "
-        f"airdrop={config.AIRDROP_INTERVAL_SECONDS}s  "
-        f"buyback_cap={config.MAX_BUYBACK_LAMPORTS} lamports"
+        f"[bot] cadence cycle={config.CYCLE_INTERVAL_SECONDS}s  claim={config.CLAIM_INTERVAL_SECONDS}s  "
+        f"airdrop={config.AIRDROP_INTERVAL_SECONDS}s  stocks_airdrop={config.STOCKS_AIRDROP_INTERVAL_SECONDS}s"
     )
-    print(f"[bot] split: operator {config.OPERATOR_PCT * 100:.0f}% / holders {config.DISTRIBUTE_PCT * 100:.0f}%")
+    print(
+        f"[bot] split: operator {config.OPERATOR_PCT * 100:.0f}% / ad reserve {config.AD_RESERVE_PCT * 100:.0f}% "
+        f"/ rewards {config.REWARD_PCT * 100:.0f}% (3-way)"
+    )
+    print(
+        f"[bot] caps: buyback={config.MAX_BUYBACK_LAMPORTS}  basket={config.MAX_STOCK_BASKET_LAMPORTS}  "
+        f"sol_airdrop={config.MAX_SOL_AIRDROP_LAMPORTS} lamports  basket_mints={len(config.STOCK_MINTS)}"
+    )
 
     while True:
         try:
