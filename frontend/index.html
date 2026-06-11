@@ -323,6 +323,8 @@
       z-index: 100;
       animation: ab-in .2s ease;
     }
+    /* the hidden attribute must win over display:flex above */
+    .alert-backdrop[hidden] { display: none; }
     @keyframes ab-in { from { opacity: 0; } to { opacity: 1; } }
     .ios-alert {
       width: 272px;
@@ -728,7 +730,7 @@
 
       async function check(addr) {
         if (!B58.test(addr)) {
-          showAlert('Invalid Wallet', 'That does not look like a Solana wallet address. Check it and try again.');
+          showAlert('Not a Solana Address', 'The address you entered is not a Solana wallet address.');
           return;
         }
         show('<div class="cr-note">checking&hellip;</div>');
