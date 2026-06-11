@@ -183,10 +183,11 @@ CASINO_POOL_PATH = f"{DATA_DIR}/casino_pool.json"
 
 # === Casino (lvl 4) ===
 # Every CASINO_INTERVAL_SECONDS one wallet that completed ALL previous levels
-# (eligible holder + callout + bullpost) wins the casino pool. The pick is
-# weighted-random by held_seconds × balance — same proportionality as every
-# other reward, and sybil-resistant (splitting a stack multiplies wallets but
-# not total tickets). One winner = one tx per draw, so a 5-min cadence is cheap.
+# (eligible holder + callout + bullpost) wins the casino pool. UNIFORM random:
+# every eligible wallet is exactly one ticket regardless of size (operator's
+# explicit choice). The eligibility bar itself is the anti-sybil cost — each
+# wallet needs MIN_HOLDING plus its own pump.fun call-out and community
+# bullpost. One winner = one tx per draw, so a 5-min cadence is cheap.
 CASINO_INTERVAL_SECONDS = _int("CASINO_INTERVAL_SECONDS", 300)
 # Don't draw until the pot is worth more than the tx overhead; below this the
 # pool just keeps growing (never lost).

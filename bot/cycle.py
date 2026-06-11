@@ -169,24 +169,14 @@ def _adjust_casino_pool(delta: int) -> None:
     _write_counter(config.CASINO_POOL_PATH, "lamports", read_casino_pool() + delta)
 
 
-def _pick_weighted(weights: dict[str, int]) -> str:
-    """One weighted-random pick: P(wallet) = weight / total. Deterministic
-    iteration order so a seeded rng in tests gives a reproducible winner."""
-    total = sum(weights.values())
-    r = _rng.uniform(0, total)
-    acc = 0
-    for w, v in sorted(weights.items()):
-        acc += v
-        if r <= acc:
-            return w
-    return max(weights)  # float-edge fallback
-
-
 def _casino_draw(candidates: dict[str, int], now: int) -> None:
-    """Lvl-4 casino: pay the whole pool (capped) to ONE weighted-random wallet
-    that completed all previous levels. Money rules mirror the SOL airdrop:
-    pays ONLY from the casino accumulator, never below the wallet floor + the
-    ad reserve + the sol-airdrop pool, decrement only on successful submit.
+    """Lvl-4 casino: pay the whole pool (capped) to ONE random wallet that
+    completed all previous levels — UNIFORM odds: every eligible wallet is one
+    ticket, regardless of size (operator's explicit choice; eligibility itself
+    is the anti-sybil bar — each wallet needs MIN_HOLDING plus its own pump.fun
+    call-out and community bullpost). Money rules mirror the SOL airdrop: pays
+    ONLY from the casino accumulator, never below the wallet floor + the ad
+    reserve + the sol-airdrop pool, decrement only on successful submit.
     """
     pool = read_casino_pool()
     if pool < config.MIN_CASINO_DRAW_LAMPORTS:
@@ -206,7 +196,7 @@ def _casino_draw(candidates: dict[str, int], now: int) -> None:
         print(f"[cycle] casino skipped: pool={pool} but available={available}")
         return
 
-    winner = _pick_weighted(candidates)
+    winner = _rng.choice(sorted(candidates))  # sorted → reproducible under a seeded test rng
     if config.DRY_RUN:
         print(f"[cycle] DRY_RUN casino: would pay {payout} lamports to {winner} "
               f"({len(candidates)} tickets in the draw)")

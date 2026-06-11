@@ -544,16 +544,6 @@ class TestSolAirdropLeg(_CycleBase):
         m.distribute_sol.assert_not_called()
 
 
-class _FixedRng:
-    """Stub rng: uniform(a, b) returns a + frac × (b − a)."""
-
-    def __init__(self, frac: float):
-        self.frac = frac
-
-    def uniform(self, a, b):
-        return a + self.frac * (b - a)
-
-
 class TestCasino(_CycleBase):
     """Lvl-4 casino: every CASINO_INTERVAL one weighted-random wallet that
     completed ALL previous levels wins the pot (capped, floor-guarded)."""
@@ -586,15 +576,20 @@ class TestCasino(_CycleBase):
         self.assertEqual(cycle.read_casino_pool(), 0)
         self.assertGreater(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
 
-    def test_weighted_pick_is_proportional(self):
-        # a=100 tickets, b=900 tickets (sorted order: by wallet string).
-        weights = {"a": 100, "b": 900}
-        with mock.patch.object(cycle, "_rng", _FixedRng(0.05)):   # r=50 → inside a
-            self.assertEqual(cycle._pick_weighted(weights), "a")
-        with mock.patch.object(cycle, "_rng", _FixedRng(0.5)):    # r=500 → inside b
-            self.assertEqual(cycle._pick_weighted(weights), "b")
-        with mock.patch.object(cycle, "_rng", _FixedRng(0.999)):  # r≈999 → still b
-            self.assertEqual(cycle._pick_weighted(weights), "b")
+    def test_pick_is_uniform_one_ticket_per_wallet(self):
+        """UNIFORM odds: a whale (huge weight) and a shrimp are one ticket
+        each. With a seeded rng over many draws both win ~half the time."""
+        import random as _random
+
+        candidates = {"a_whale": 10**12, "b_shrimp": 1}
+        rng = _random.Random(42)
+        with mock.patch.object(cycle, "_rng", rng):
+            wins = {"a_whale": 0, "b_shrimp": 0}
+            for _ in range(1000):
+                wins[rng.choice(sorted(candidates))] += 1
+        # both get a fair share — weight plays no role
+        self.assertGreater(wins["b_shrimp"], 400)
+        self.assertGreater(wins["a_whale"], 400)
 
     def test_pot_below_min_keeps_growing(self):
         owner = _wallet()

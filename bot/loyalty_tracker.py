@@ -217,9 +217,10 @@ def task_weights(state: dict[str, dict], task: str) -> dict[str, int]:
 
 
 def casino_weights(state: dict[str, dict]) -> dict[str, int]:
-    """Lvl-4 (casino) ticket weights: eligible holders that completed ALL
-    previous levels — holding (weight > 0) AND callout AND bullpost. The values
-    are the same held_seconds × balance weights, used as lottery tickets."""
+    """Lvl-4 (casino) candidates: eligible holders that completed ALL previous
+    levels — holding (weight > 0) AND callout AND bullpost. The draw itself is
+    UNIFORM (one ticket per wallet); the held×balance values are returned only
+    for consistency with the other weight sets (stats etc.)."""
     out: dict[str, int] = {}
     for w, v in weighted_holdings(state).items():
         tasks = state.get(w, {}).get("tasks") or {}
