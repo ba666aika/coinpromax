@@ -88,32 +88,32 @@
     .stats {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: clamp(12px, 1.8vw, 20px);
-      width: min(860px, 90vw);
+      gap: clamp(14px, 2vw, 22px);
+      width: min(840px, 90vw);
     }
     .stat {
       position: relative;
       aspect-ratio: 1 / 1;
-      border-radius: clamp(22px, 3vw, 34px);
-      padding: clamp(13px, 1.8vw, 20px);
+      border-radius: clamp(20px, 2.6vw, 28px);
+      padding: clamp(13px, 1.8vw, 17px);
       display: flex;
       flex-direction: column;
       text-align: left;
       overflow: hidden;
-      box-shadow: 0 10px 28px rgba(0,0,0,.12);
+      /* home-screen widgets sit almost flat — a whisper of depth only */
+      box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 18px rgba(0,0,0,.07);
     }
     .wg-top {
-      font-size: clamp(.7rem, 1vw, .85rem);
+      font-size: clamp(.72rem, 1vw, .84rem);
       font-weight: 600;
       letter-spacing: -0.01em;
     }
     .stat-v {
       font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
       line-height: 1;
       white-space: nowrap;
     }
-    .stat-v .unit { font-size: .45em; font-weight: 500; margin-left: .15em; }
     .wg-bottom {
       margin-top: auto;
       font-size: clamp(.66rem, .95vw, .8rem);
@@ -121,62 +121,96 @@
     }
 
     /* Weather — next airdrop */
-    .wg--weather { background: linear-gradient(180deg, #2e7cd6 0%, #5aa3e6 55%, #8fc5ef 100%); }
-    .wg--weather .wg-top { color: #fff; }
-    .wg--weather .stat-v { color: #fff; font-weight: 300; font-size: clamp(1.9rem, 3.5vw, 3rem); margin-top: .18em; }
-    .wg--weather .stat-v .unit { color: rgba(255,255,255,.85); }
-    .wg--weather .wg-bottom { color: rgba(255,255,255,.92); }
+    .wg--weather { background: linear-gradient(180deg, #1c66cf 0%, #3d87de 45%, #71b1ec 100%); }
+    .wg--weather .wg-top { color: #fff; text-shadow: 0 .5px 2px rgba(0,40,90,.2); }
+    .wg--weather .stat-v {
+      color: #fff;
+      font-weight: 200;
+      font-size: clamp(2rem, 3.7vw, 3.1rem);
+      margin-top: .1em;
+      letter-spacing: 0;
+    }
+    /* the unit rides high and small, like the degree mark */
+    .wg--weather .stat-v .unit {
+      font-size: .34em; font-weight: 500;
+      color: rgba(255,255,255,.85);
+      vertical-align: .65em; margin-left: .2em; letter-spacing: .02em;
+    }
+    .wg-sun { width: clamp(18px, 2.2vw, 24px); height: clamp(18px, 2.2vw, 24px); margin-top: auto; }
+    .wg-cond {
+      color: #fff;
+      font-size: clamp(.68rem, .95vw, .8rem);
+      font-weight: 500;
+      margin-top: .3em;
+      text-shadow: 0 .5px 2px rgba(0,40,90,.2);
+    }
 
-    /* Timer — until next airdrop (Clock app: black, orange digits) */
+    /* Timer — until next airdrop (Clock app: black, thin orange digits) */
     .wg--timer { background: #000; }
     .wg--timer .wg-top { color: #fff; }
-    .wg--timer .stat-v { color: #ff9f0a; font-weight: 300; font-size: clamp(1.8rem, 3.3vw, 2.8rem); margin-top: .22em; }
+    .wg--timer .stat-v {
+      color: #ff9f0a;
+      font-weight: 200;
+      font-size: clamp(2rem, 3.8vw, 3.2rem);
+      margin: auto 0;                /* digits centered like the Live Activity */
+      letter-spacing: 0;
+    }
     .wg--timer .wg-pause {
       position: absolute;
-      right: clamp(12px, 1.6vw, 18px);
-      bottom: clamp(12px, 1.6vw, 18px);
-      width: clamp(28px, 3.4vw, 38px);
-      height: clamp(28px, 3.4vw, 38px);
+      right: clamp(11px, 1.5vw, 15px);
+      bottom: clamp(11px, 1.5vw, 15px);
+      width: clamp(30px, 3.6vw, 40px);
+      height: clamp(30px, 3.6vw, 40px);
       border-radius: 50%;
-      background: rgba(255,159,10,.25);
+      background: rgba(255,159,10,.28);
       display: flex; align-items: center; justify-content: center;
+      gap: clamp(3px, .4vw, 4.5px);
     }
-    .wg--timer .wg-pause::before {
+    .wg--timer .wg-pause::before,
+    .wg--timer .wg-pause::after {
       content: "";
-      width: 28%; height: 36%;
-      border-left: 3px solid #ff9f0a;
-      border-right: 3px solid #ff9f0a;
+      width: clamp(3px, .4vw, 4.5px);
+      height: 34%;
+      border-radius: 2px;
+      background: #ff9f0a;
     }
 
-    /* Maps — distributed all-time */
-    .wg--maps {
-      background:
-        linear-gradient(108deg, transparent 46%, #ffffff 46%, #ffffff 53%, transparent 53%),
-        linear-gradient(18deg, transparent 65%, #f7e07d 65%, #f7e07d 69%, transparent 69%),
-        radial-gradient(95px 75px at 88% 15%, #cfe6bd 0%, rgba(207,230,189,0) 70%),
-        radial-gradient(115px 85px at 5% 90%, #cfe6bd 0%, rgba(207,230,189,0) 70%),
-        #eceadf;
-    }
-    .wg--maps .wg-top { color: #5b5b60; }
-    .wg--maps .stat-v { color: #1d1d1f; font-weight: 600; font-size: clamp(1.6rem, 2.9vw, 2.4rem); margin-top: .22em; }
-    .wg--maps .stat-v .unit { color: #6e6e73; }
-    .wg--maps .wg-bottom { color: #5b5b60; }
+    /* Maps — distributed all-time: real map + frosted ETA panel */
+    .wg--maps { background: #edeae2; padding: 0; }
+    .wg-map { position: absolute; inset: 0; width: 100%; height: 100%; }
     .wg--maps .wg-nav {
       position: absolute;
-      right: clamp(11px, 1.5vw, 16px);
-      top: clamp(11px, 1.5vw, 16px);
+      right: clamp(10px, 1.4vw, 14px);
+      top: clamp(10px, 1.4vw, 14px);
       width: clamp(26px, 3vw, 34px);
       height: clamp(26px, 3vw, 34px);
       border-radius: 50%;
-      background: #0a84ff;
+      background: #0a7aff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.18);
       display: flex; align-items: center; justify-content: center;
     }
-    .wg--maps .wg-nav svg { width: 52%; height: 52%; }
+    .wg--maps .wg-nav svg { width: 50%; height: 50%; }
+    .wg-eta {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: clamp(8px, 1.2vw, 12px) clamp(13px, 1.8vw, 16px) clamp(10px, 1.4vw, 14px);
+      background: rgba(255,255,255,.82);
+      -webkit-backdrop-filter: blur(10px) saturate(1.6);
+      backdrop-filter: blur(10px) saturate(1.6);
+    }
+    .wg-eta .stat-v { color: #1d1d1f; font-weight: 600; font-size: clamp(1.25rem, 2.2vw, 1.8rem); letter-spacing: -0.02em; }
+    .wg-eta .stat-v .unit { font-size: .55em; font-weight: 600; color: #86868b; margin-left: .15em; }
+    .wg-eta-sub { color: #86868b; font-size: clamp(.62rem, .9vw, .74rem); font-weight: 500; margin-top: .25em; }
 
     /* Calendar — holders (white, red weekday-style label) */
     .wg--cal { background: #fff; }
-    .wg--cal .wg-top { color: #ff3b30; text-transform: uppercase; letter-spacing: .05em; }
-    .wg--cal .stat-v { color: #1d1d1f; font-weight: 400; font-size: clamp(2rem, 3.6vw, 3.1rem); margin-top: .14em; }
+    .wg--cal .wg-top {
+      color: #ff3b30;
+      text-transform: uppercase;
+      font-size: clamp(.66rem, .9vw, .78rem);
+      letter-spacing: .06em;
+    }
+    .wg--cal .stat-v { color: #1d1d1f; font-weight: 400; font-size: clamp(1.9rem, 3.4vw, 2.9rem); margin-top: .12em; letter-spacing: 0; }
     .wg--cal .wg-bottom { color: #86868b; }
 
     @media (max-width: 680px) {
@@ -476,21 +510,46 @@
         <div class="stat wg--weather">
           <div class="wg-top">Next Airdrop</div>
           <div class="stat-v" id="st-next">&mdash;</div>
-          <div class="wg-bottom">&#9728;&#65039; Fees flowing in</div>
+          <svg class="wg-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="#ffd60a" stroke-width="1.7" stroke-linecap="round">
+              <line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/>
+              <line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/>
+              <line x1="4.6" y1="4.6" x2="6.4" y2="6.4"/><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"/>
+              <line x1="4.6" y1="19.4" x2="6.4" y2="17.6"/><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"/>
+            </g>
+            <circle cx="12" cy="12" r="4.6" fill="#ffd60a"/>
+          </svg>
+          <div class="wg-cond">Fees flowing in</div>
         </div>
+
         <div class="stat wg--timer">
           <div class="wg-top">Until Next Airdrop</div>
           <div class="stat-v" id="st-timer">&mdash;</div>
           <div class="wg-pause" aria-hidden="true"></div>
         </div>
+
         <div class="stat wg--maps">
-          <div class="wg-top">Distributed</div>
-          <div class="stat-v" id="st-total">&mdash;</div>
-          <div class="wg-bottom">All-time, to holders</div>
+          <svg class="wg-map" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <rect width="200" height="200" fill="#ECE9E1"/>
+            <ellipse cx="178" cy="36" rx="52" ry="38" fill="#CBE3B4"/>
+            <ellipse cx="14" cy="158" rx="44" ry="34" fill="#CBE3B4"/>
+            <ellipse cx="120" cy="195" rx="30" ry="18" fill="#D9EBC9"/>
+            <path d="M-10 138 Q 52 122 84 70 T 212 -6" fill="none" stroke="#ffffff" stroke-width="14"/>
+            <path d="M-10 138 Q 52 122 84 70 T 212 -6" fill="none" stroke="#F8DC5F" stroke-width="8.5"/>
+            <path d="M-8 52 Q 70 76 206 44" fill="none" stroke="#ffffff" stroke-width="6.5"/>
+            <path d="M34 208 Q 66 130 28 44" fill="none" stroke="#ffffff" stroke-width="6.5"/>
+            <path d="M118 206 Q 138 158 204 140" fill="none" stroke="#ffffff" stroke-width="5"/>
+            <path d="M70 210 Q 116 168 196 178" fill="none" stroke="#ffffff" stroke-width="4"/>
+          </svg>
           <div class="wg-nav" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true"><path d="M21 3 3 10.5l7.5 3L13.5 21 21 3z"/></svg>
           </div>
+          <div class="wg-eta">
+            <div class="stat-v" id="st-total">&mdash;</div>
+            <div class="wg-eta-sub">Distributed all-time</div>
+          </div>
         </div>
+
         <div class="stat wg--cal">
           <div class="wg-top">Holders</div>
           <div class="stat-v" id="st-holders">&mdash;</div>
