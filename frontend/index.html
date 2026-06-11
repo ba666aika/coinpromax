@@ -170,38 +170,72 @@
       box-shadow: 0 0 0 4px rgba(0,113,227,.16);
     }
 
-    /* "check wallet" result panel */
+    /* "check wallet" result panel — Apple card */
     .check-result {
       width: min(440px, 88vw);
       background: #fff;
-      border: 1px solid #e3e3e8;
-      border-radius: 14px;
-      padding: 16px 20px;
+      border-radius: 18px;
+      padding: 22px 22px 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.05), 0 18px 44px rgba(0,0,0,.09);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
       color: #1d1d1f;
       text-align: left;
-      animation: cr-in .45s cubic-bezier(.16,1,.3,1);
+      animation: cr-in .5s cubic-bezier(.16,1,.3,1);
     }
-    @keyframes cr-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-    .cr-lvl {
+    @keyframes cr-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+    .cr-kicker {
+      font-size: .68rem;
       font-weight: 600;
-      font-size: 1.25rem;
-      letter-spacing: -0.02em;
-      margin-bottom: .4em;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      color: #86868b;
     }
+    .cr-title {
+      font-weight: 600;
+      font-size: 1.55rem;
+      letter-spacing: -0.025em;
+      line-height: 1.15;
+      margin: .12em 0 .65em;
+    }
+    .cr-track { display: flex; gap: 6px; margin-bottom: .9em; }
+    .cr-seg { flex: 1; height: 6px; border-radius: 3px; background: #e8e8ed; }
+    .cr-seg.on { background: #0071e3; }
     .cr-row {
       display: flex;
-      justify-content: space-between;
-      gap: 1em;
-      padding: .42em 0;
-      border-top: 1px solid #f0f0f2;
-      font-size: .9rem;
+      align-items: center;
+      gap: 12px;
+      padding: .62em 0;
+      border-top: .5px solid #e8e8ed;
+      font-size: .95rem;
+      letter-spacing: -0.01em;
     }
-    .cr-row span:first-child { color: #6e6e73; }
-    .cr-ok { color: #1d8838; font-weight: 500; }
-    .cr-no { color: #86868b; }
-    .cr-note { color: #6e6e73; font-size: .8rem; margin-top: .6em; line-height: 1.45; }
-    .cr-err { color: #d70015; font-size: .9rem; }
+    .cr-ic {
+      flex: none;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .68rem; font-weight: 700;
+      background: #e8e8ed; color: #aeaeb2;
+    }
+    .cr-ic.on { background: #34c759; color: #fff; }
+    .cr-stat {
+      margin-left: auto;
+      color: #86868b;
+      font-size: .85rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .cr-stat.blue { color: #0071e3; font-weight: 500; }
+    .cr-stat.green { color: #34c759; font-weight: 500; }
+    .cr-foot {
+      border-top: .5px solid #e8e8ed;
+      margin-top: .2em;
+      padding: .8em 0 .4em;
+      color: #86868b;
+      font-size: .8rem;
+      line-height: 1.45;
+    }
+    .cr-note { color: #6e6e73; font-size: .9rem; padding: .2em 0 .5em; }
+    .cr-err { color: #d70015; font-size: .9rem; padding: .2em 0 .5em; }
 
     /* ---------- Page 3 — levels, Apple model-comparison style ---------- */
     .page--levels {
@@ -448,34 +482,49 @@
       const fmtClock = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 
       const show = (html) => { box.hidden = false; box.innerHTML = html; };
-      const row = (label, ok, text) =>
-        '<div class="cr-row"><span>' + label + '</span>' +
-        '<span class="' + (ok ? 'cr-ok' : 'cr-no') + '">' + text + '</span></div>';
+      const TIER = ['Not holding yet', 'Coin', 'Coin Pro', 'Coin Pro Max', 'Coin Pro Max Ultra'];
+
+      const track = (lvl) => {
+        let s = '<div class="cr-track">';
+        for (let i = 1; i <= 4; i++) s += '<div class="cr-seg' + (i <= lvl ? ' on' : '') + '"></div>';
+        return s + '</div>';
+      };
+      const row = (label, done, stat) =>
+        '<div class="cr-row">' +
+        '<span class="cr-ic' + (done ? ' on' : '') + '">' + (done ? '&#10003;' : '') + '</span>' +
+        '<span>' + label + '</span>' +
+        (stat ? '<span class="cr-stat ' + stat[1] + '">' + stat[0] + '</span>' : '') +
+        '</div>';
 
       function render(d) {
         if (!d.known) {
-          show('<div class="cr-lvl">LVL 0</div>' +
-               '<div class="cr-note">this wallet is not holding Coin Pro Max yet. buy and hold to enter LVL 1.</div>');
+          show('<div class="cr-kicker">Level 0 of 4</div>' +
+               '<div class="cr-title">' + TIER[0] + '</div>' +
+               track(0) +
+               '<div class="cr-note">Buy and hold Coin Pro Max to reach Level&nbsp;1.</div>');
           return;
         }
         const t = d.tasks || {};
         const lvl = d.casino_eligible ? 4 : (d.level || 0);
-        let casinoText, casinoOk = false;
-        if (d.casino_eligible) { casinoText = 'in every draw'; casinoOk = true; }
-        else if (d.casino_countdown_s != null) casinoText = 'in ' + fmtClock(d.casino_countdown_s);
-        else casinoText = 'reach lvl 3 first';
+        let casino;
+        if (d.casino_eligible) casino = ['In every draw', 'green'];
+        else if (d.casino_countdown_s != null) casino = [fmtClock(d.casino_countdown_s), 'blue'];
+        else casino = ['Locked', ''];
 
-        let html = '<div class="cr-lvl">LVL ' + lvl + '</div>' +
-          row('hold, no sells', t.hold, t.hold ? '&#10003;' : '&mdash;') +
-          row('pump.fun call-out', t.callout, t.callout ? '&#10003;' : '&mdash;') +
-          row('communities bullpost', t.bullpost, t.bullpost ? '&#10003;' : '&mdash;') +
-          row('casino', casinoOk, casinoText);
+        let html =
+          '<div class="cr-kicker">Level ' + lvl + ' of 4</div>' +
+          '<div class="cr-title">' + TIER[lvl] + '</div>' +
+          track(lvl) +
+          row('Hold without selling', t.hold) +
+          row('Call-out on pump.fun', t.callout) +
+          row('Bullpost in communities', t.bullpost) +
+          row('Casino', d.casino_eligible, casino);
         if (d.eligible) {
-          html += '<div class="cr-note">holding ' + fmtHeld(d.held_seconds) +
+          html += '<div class="cr-foot">Holding ' + fmtHeld(d.held_seconds) +
                   ' &middot; ' + (d.share_bps / 100).toFixed(2) + '% of every airdrop' +
-                  (d.rank ? ' &middot; rank #' + d.rank : '') + '</div>';
+                  (d.rank ? ' &middot; #' + d.rank : '') + '</div>';
         } else {
-          html += '<div class="cr-note">not earning right now. hold above the minimum without selling and time starts counting.</div>';
+          html += '<div class="cr-foot">Not earning right now. Hold above the minimum without selling and time starts counting.</div>';
         }
         show(html);
       }
