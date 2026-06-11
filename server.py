@@ -160,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
                     "known": True,
                     "eligible": eligible,
                     "level": _wallet_level(info, min_hold),
+                    # Lvl 4 (casino): all previous levels done → in every draw.
+                    "casino_eligible": eligible and "callout" in tasks and "bullpost" in tasks,
                     "tasks": {
                         "hold": eligible,
                         "callout": "callout" in tasks,

@@ -57,6 +57,7 @@ class _CycleBase(unittest.TestCase):
             "AD_RESERVE_PATH": config.AD_RESERVE_PATH,
             "CPM_BUY_POOL_PATH": config.CPM_BUY_POOL_PATH,
             "STOCK_BUY_POOL_PATH": config.STOCK_BUY_POOL_PATH,
+            "CASINO_POOL_PATH": config.CASINO_POOL_PATH,
             "DATA_DIR": config.DATA_DIR,
             "DRY_RUN": config.DRY_RUN,
         }
@@ -68,6 +69,7 @@ class _CycleBase(unittest.TestCase):
         config.AD_RESERVE_PATH = os.path.join(self.tmp, "ad_reserve.json")
         config.CPM_BUY_POOL_PATH = os.path.join(self.tmp, "cpm_buy_pool.json")
         config.STOCK_BUY_POOL_PATH = os.path.join(self.tmp, "stock_buy_pool.json")
+        config.CASINO_POOL_PATH = os.path.join(self.tmp, "casino_pool.json")
         config.DRY_RUN = False
         self._orig_marker = cycle._LAST_AIRDROP_PATH
         cycle._LAST_AIRDROP_PATH = os.path.join(self.tmp, "last_airdrop_at.txt")
@@ -75,6 +77,8 @@ class _CycleBase(unittest.TestCase):
         cycle._LAST_CLAIM_PATH = os.path.join(self.tmp, "last_claim_at.txt")
         self._orig_stocks_marker = cycle._LAST_STOCKS_AIRDROP_PATH
         cycle._LAST_STOCKS_AIRDROP_PATH = os.path.join(self.tmp, "last_stocks_airdrop_at.txt")
+        self._orig_casino_marker = cycle._LAST_CASINO_PATH
+        cycle._LAST_CASINO_PATH = os.path.join(self.tmp, "last_casino_at.txt")
         cycle._pool_owners.clear()
         cycle._classified_owners.clear()
         cycle._last_tasks_fetch_ts = 0
@@ -85,6 +89,7 @@ class _CycleBase(unittest.TestCase):
         cycle._LAST_AIRDROP_PATH = self._orig_marker
         cycle._LAST_CLAIM_PATH = self._orig_claim_marker
         cycle._LAST_STOCKS_AIRDROP_PATH = self._orig_stocks_marker
+        cycle._LAST_CASINO_PATH = self._orig_casino_marker
 
     # -- helpers --
 
@@ -193,20 +198,22 @@ class _CycleBase(unittest.TestCase):
 
 
 class TestSplitAndCap(_CycleBase):
-    """claimed = 1 SOL → operator 0.20, ad reserve 0.30 (booked, not moved),
-    reward 0.50 split evenly into accumulators: sol_pool / buyback / basket."""
+    """claimed = 1 SOL → operator 0.20, ad reserve 0.20 (booked, not moved),
+    casino 0.10 (pooled), reward 0.50 split evenly into accumulators:
+    sol_pool / buyback / basket."""
 
-    def test_full_split_20_30_50(self):
+    def test_full_split_20_20_10_50(self):
         owner = _wallet()
         self._seed({owner: 100})
         with self._harness(before=_SOL, after=2 * _SOL, holders=self._holders({owner: 100})) as m:
             cycle._write_last_airdrop_ts(int(time.time()))  # gate airdrops OFF
             cycle.tick()
-        # Operator transfer is the ONLY transfer (ad reserve is accounting only).
+        # Operator transfer is the ONLY transfer (ad reserve + casino are books).
         m.build_and_send.assert_called_once()
         self.assertIn("operator_cut(200000000)", m.build_and_send.call_args.kwargs["label"])
-        # Ad reserve booked, stays on wallet.
-        self.assertEqual(cycle.read_ad_reserve(), 300_000_000)
+        # Ad reserve + casino pot booked, stay on wallet.
+        self.assertEqual(cycle.read_ad_reserve(), 200_000_000)
+        self.assertEqual(cycle.read_casino_pool(), 100_000_000)
         # Reward 500M → thirds: sol_pool 166,666,666 / buyback same / stocks remainder.
         self.assertEqual(cycle.read_sol_pool(), 166_666_666)
         m.buyback.assert_called_once_with(166_666_666)
@@ -230,6 +237,7 @@ class TestSplitAndCap(_CycleBase):
         self.assertEqual(cycle.read_cpm_buy_pool(), 500_000)
         self.assertEqual(cycle.read_stock_buy_pool(), 500_000)
         self.assertEqual(cycle.read_sol_pool(), 500_000)
+        self.assertEqual(cycle.read_casino_pool(), 300_000)
 
     def test_failed_swap_keeps_budget_pooled(self):
         owner = _wallet()
@@ -341,6 +349,7 @@ class TestFailClosed(_CycleBase):
         m.buyback.assert_not_called()              # every downstream leg skipped
         m.buy_basket.assert_not_called()
         self.assertEqual(cycle.read_ad_reserve(), 0)  # booked AFTER the cut succeeds
+        self.assertEqual(cycle.read_casino_pool(), 0)
         self.assertEqual(cycle.read_sol_pool(), 0)
 
     def test_token_program_failure_skips_entire_tick(self):
@@ -533,6 +542,128 @@ class TestSolAirdropLeg(_CycleBase):
             cycle._write_last_claim_ts(int(time.time()))
             cycle.tick()
         m.distribute_sol.assert_not_called()
+
+
+class _FixedRng:
+    """Stub rng: uniform(a, b) returns a + frac × (b − a)."""
+
+    def __init__(self, frac: float):
+        self.frac = frac
+
+    def uniform(self, a, b):
+        return a + self.frac * (b - a)
+
+
+class TestCasino(_CycleBase):
+    """Lvl-4 casino: every CASINO_INTERVAL one weighted-random wallet that
+    completed ALL previous levels wins the pot (capped, floor-guarded)."""
+
+    def _quiet_money(self):
+        """Gate claim + airdrops off so the only money path is the casino."""
+        now = int(time.time())
+        cycle._write_last_claim_ts(now)
+        cycle._write_last_airdrop_ts(now)
+        cycle._write_marker(cycle._LAST_STOCKS_AIRDROP_PATH, now)
+
+    def test_draw_pays_one_lvl4_winner_and_decrements_pot(self):
+        lvl4, lvl2 = _wallet(), _wallet()
+        # lvl4 did both tasks; lvl2 only the callout → NOT in the draw.
+        state_balances = {lvl4: 100, lvl2: 100}
+        now = int(time.time())
+        state = {
+            lvl4: {"first_seen_ts": now - 7200, "last_balance": 100, "last_check_ts": now - 3600,
+                   "held_seconds": 500, "tasks": {"callout": 1, "bullpost": 1}},
+            lvl2: {"first_seen_ts": now - 7200, "last_balance": 100, "last_check_ts": now - 3600,
+                   "held_seconds": 500, "tasks": {"callout": 1}},
+        }
+        tracker.save_state(state)
+        cycle._adjust_casino_pool(50_000_000)
+        with self._harness(before=10 * _SOL, after=10 * _SOL, holders=self._holders(state_balances)) as m:
+            self._quiet_money()
+            cycle.tick()
+        m.build_and_send.assert_called_once()
+        self.assertIn("casino_win(50000000)", m.build_and_send.call_args.kwargs["label"])
+        self.assertEqual(cycle.read_casino_pool(), 0)
+        self.assertGreater(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
+
+    def test_weighted_pick_is_proportional(self):
+        # a=100 tickets, b=900 tickets (sorted order: by wallet string).
+        weights = {"a": 100, "b": 900}
+        with mock.patch.object(cycle, "_rng", _FixedRng(0.05)):   # r=50 → inside a
+            self.assertEqual(cycle._pick_weighted(weights), "a")
+        with mock.patch.object(cycle, "_rng", _FixedRng(0.5)):    # r=500 → inside b
+            self.assertEqual(cycle._pick_weighted(weights), "b")
+        with mock.patch.object(cycle, "_rng", _FixedRng(0.999)):  # r≈999 → still b
+            self.assertEqual(cycle._pick_weighted(weights), "b")
+
+    def test_pot_below_min_keeps_growing(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        cycle._adjust_casino_pool(1_000_000)  # < MIN_CASINO_DRAW (5M)
+        with self._harness(holders=self._holders({owner: 100})) as m:
+            self._quiet_money()
+            cycle.tick()
+        m.build_and_send.assert_not_called()
+        self.assertEqual(cycle.read_casino_pool(), 1_000_000)
+        self.assertEqual(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)  # retry soon
+
+    def test_no_lvl4_candidates_pot_intact(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout",))  # lvl 2 only
+        cycle._adjust_casino_pool(50_000_000)
+        with self._harness(holders=self._holders({owner: 100})) as m:
+            self._quiet_money()
+            cycle.tick()
+        m.build_and_send.assert_not_called()
+        self.assertEqual(cycle.read_casino_pool(), 50_000_000)
+        self.assertEqual(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
+
+    def test_payout_capped(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        cycle._adjust_casino_pool(2 * _SOL)
+        with mock.patch.object(config, "MAX_CASINO_PAYOUT_LAMPORTS", 100_000_000):
+            with self._harness(before=10 * _SOL, after=10 * _SOL, holders=self._holders({owner: 100})) as m:
+                self._quiet_money()
+                cycle.tick()
+        self.assertIn("casino_win(100000000)", m.build_and_send.call_args.kwargs["label"])
+        self.assertEqual(cycle.read_casino_pool(), 2 * _SOL - 100_000_000)
+
+    def test_respects_wallet_floor_ad_reserve_and_sol_pool(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        cycle._adjust_casino_pool(2 * _SOL)
+        cycle._add_ad_reserve(500_000_000)
+        cycle._add_sol_pool(300_000_000)
+        # wallet = 1 SOL → available = 1e9 − floor(5e7) − ad(5e8) − sol_pool(3e8) = 0.15 SOL
+        with self._harness(before=_SOL, after=_SOL, holders=self._holders({owner: 100})) as m:
+            self._quiet_money()
+            cycle.tick()
+        expected = _SOL - config.GAS_FLOOR_LAMPORTS - 500_000_000 - 300_000_000
+        self.assertIn(f"casino_win({expected})", m.build_and_send.call_args.kwargs["label"])
+
+    def test_interval_gate(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        cycle._adjust_casino_pool(50_000_000)
+        with self._harness(holders=self._holders({owner: 100})) as m:
+            self._quiet_money()
+            cycle._write_marker(cycle._LAST_CASINO_PATH, int(time.time()))  # just drew
+            cycle.tick()
+        m.build_and_send.assert_not_called()
+        self.assertEqual(cycle.read_casino_pool(), 50_000_000)
+
+    def test_dry_run_draws_nothing(self):
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        cycle._adjust_casino_pool(50_000_000)
+        with mock.patch.object(config, "DRY_RUN", True):
+            with self._harness(before=10 * _SOL, after=10 * _SOL, holders=self._holders({owner: 100})) as m:
+                self._quiet_money()
+                cycle.tick()
+        m.build_and_send.assert_not_called()
+        self.assertEqual(cycle.read_casino_pool(), 50_000_000)
+        self.assertEqual(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
 
 
 class TestClaimGating(_CycleBase):

@@ -42,7 +42,9 @@ _STATE_FILES = (
     "ad_reserve.json",          # ad-bounty reserve accounting
     "cpm_buy_pool.json",        # buyback budget accumulator
     "stock_buy_pool.json",      # stock-basket budget accumulator
+    "casino_pool.json",         # lvl-4 casino pot
     "last_stocks_airdrop_at.txt",
+    "last_casino_at.txt",
 )
 
 

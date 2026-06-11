@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 from typing import Any
 
@@ -61,7 +62,11 @@ from .rpc import RPCError
 
 _LAST_AIRDROP_PATH = f"{config.DATA_DIR}/last_airdrop_at.txt"
 _LAST_STOCKS_AIRDROP_PATH = f"{config.DATA_DIR}/last_stocks_airdrop_at.txt"
+_LAST_CASINO_PATH = f"{config.DATA_DIR}/last_casino_at.txt"
 _LAST_CLAIM_PATH = f"{config.DATA_DIR}/last_claim_at.txt"
+
+# Casino randomness — OS entropy; tests patch this with a seeded Random.
+_rng = random.SystemRandom()
 
 # Throttle for the external task APIs (allowlist files are read every tick).
 _last_tasks_fetch_ts = 0
@@ -154,6 +159,79 @@ def read_stock_buy_pool() -> int:
 
 def _adjust_stock_buy_pool(delta: int) -> None:
     _write_counter(config.STOCK_BUY_POOL_PATH, "lamports", read_stock_buy_pool() + delta)
+
+
+def read_casino_pool() -> int:
+    return _read_counter(config.CASINO_POOL_PATH, "lamports")
+
+
+def _adjust_casino_pool(delta: int) -> None:
+    _write_counter(config.CASINO_POOL_PATH, "lamports", read_casino_pool() + delta)
+
+
+def _pick_weighted(weights: dict[str, int]) -> str:
+    """One weighted-random pick: P(wallet) = weight / total. Deterministic
+    iteration order so a seeded rng in tests gives a reproducible winner."""
+    total = sum(weights.values())
+    r = _rng.uniform(0, total)
+    acc = 0
+    for w, v in sorted(weights.items()):
+        acc += v
+        if r <= acc:
+            return w
+    return max(weights)  # float-edge fallback
+
+
+def _casino_draw(candidates: dict[str, int], now: int) -> None:
+    """Lvl-4 casino: pay the whole pool (capped) to ONE weighted-random wallet
+    that completed all previous levels. Money rules mirror the SOL airdrop:
+    pays ONLY from the casino accumulator, never below the wallet floor + the
+    ad reserve + the sol-airdrop pool, decrement only on successful submit.
+    """
+    pool = read_casino_pool()
+    if pool < config.MIN_CASINO_DRAW_LAMPORTS:
+        return  # pot too small — keep growing, retry next tick
+    if not candidates:
+        print("[cycle] casino due but nobody at lvl 4 yet — pot keeps growing")
+        return
+
+    try:
+        balance = rpc.get_sol_balance(str(config.WALLET_PUBKEY))
+    except RPCError as exc:
+        print(f"[cycle] casino balance read failed (fail-CLOSED, skipping draw): {exc}")
+        return
+    available = balance - config.GAS_FLOOR_LAMPORTS - read_ad_reserve() - read_sol_pool()
+    payout = min(pool, config.MAX_CASINO_PAYOUT_LAMPORTS, max(0, available))
+    if payout <= 0:
+        print(f"[cycle] casino skipped: pool={pool} but available={available}")
+        return
+
+    winner = _pick_weighted(candidates)
+    if config.DRY_RUN:
+        print(f"[cycle] DRY_RUN casino: would pay {payout} lamports to {winner} "
+              f"({len(candidates)} tickets in the draw)")
+        return
+
+    try:
+        sig = stx.build_and_send(
+            [stx.ix_transfer_sol(
+                from_pubkey=config.WALLET_PUBKEY,
+                to_pubkey=Pubkey.from_string(winner),
+                lamports=payout,
+            )],
+            label=f"casino_win({payout})",
+        )
+    except (RPCError, ValueError) as exc:
+        print(f"[cycle] casino payout failed (pot stays, retry next window): {exc}")
+        return
+
+    _adjust_casino_pool(-payout)
+    dist._append_payouts_log([{
+        "ts": now, "asset": "CASINO", "wallet": winner, "amount": payout,
+        "sig": sig, "confirmed": True,
+    }])
+    print(f"[cycle] CASINO: {winner} won {payout} lamports ({len(candidates)} tickets)")
+    _write_marker(_LAST_CASINO_PATH, now)
 
 
 def _read_marker(path: str) -> int:
@@ -291,7 +369,7 @@ def _claim_cut_split() -> dict[str, int]:
     leaves the SOL in the wallet for the next cycle (the measured delta self-
     heals). Reads are fail-CLOSED. Returns a small dict for logging.
     """
-    out = {"claimed": 0, "operator": 0, "ad_reserve": 0, "sol_pool": 0, "buyback": 0, "stocks": 0}
+    out = {"claimed": 0, "operator": 0, "ad_reserve": 0, "casino": 0, "sol_pool": 0, "buyback": 0, "stocks": 0}
     wallet = str(config.WALLET_PUBKEY)
 
     try:
@@ -357,10 +435,17 @@ def _claim_cut_split() -> dict[str, int]:
         _add_ad_reserve(ad_lamports)
         out["ad_reserve"] = ad_lamports
 
+    # 2b) Casino pot (lvl 4): accumulates; paid out by _casino_draw on its own
+    #     5-minute gate to ONE weighted-random lvl-4 wallet.
+    casino_lamports = int(claimed * config.CASINO_PCT)
+    if casino_lamports > 0:
+        _adjust_casino_pool(casino_lamports)
+        out["casino"] = casino_lamports
+
     # 3) Reward pool = the rest, split evenly into three ACCUMULATORS. Swaps
     #    fire only once a pool clears MIN_SWAP_LAMPORTS, so micro-claims build
     #    up instead of being burned on ~60k-lamport tx overhead per micro-swap.
-    reward = claimed - operator_lamports - ad_lamports
+    reward = claimed - operator_lamports - ad_lamports - casino_lamports
     if reward <= 0:
         return out
     sol_share = reward // 3
@@ -399,7 +484,8 @@ def _claim_cut_split() -> dict[str, int]:
 
     print(
         f"[cycle] claimed={claimed} operator={out['operator']} ad_reserve={out['ad_reserve']} "
-        f"sol_pool+={out['sol_pool']} buyback={out['buyback']} stocks={out['stocks']} lamports"
+        f"casino+={out['casino']} sol_pool+={out['sol_pool']} buyback={out['buyback']} "
+        f"stocks={out['stocks']} lamports"
     )
     return out
 
@@ -441,6 +527,7 @@ def tick() -> None:
     payout_weights = tracker.filter_excluded(tracker.weighted_holdings(state), excluded)
     callout_weights = tracker.filter_excluded(tracker.task_weights(state, "callout"), excluded)
     bullpost_weights = tracker.filter_excluded(tracker.task_weights(state, "bullpost"), excluded)
+    casino_candidates = tracker.filter_excluded(tracker.casino_weights(state), excluded)
     last_airdrop = _read_last_airdrop_ts()
     _write_stats(
         {
@@ -461,10 +548,13 @@ def tick() -> None:
             "lvl1_holders": len(payout_weights),
             "lvl_callout_holders": len(callout_weights),
             "lvl_bullpost_holders": len(bullpost_weights),
+            "lvl4_casino_tickets": len(casino_candidates),
             "sol_pool_lamports": read_sol_pool(),
             "ad_reserve_lamports": read_ad_reserve(),
             "cpm_buy_pool_lamports": read_cpm_buy_pool(),
             "stock_buy_pool_lamports": read_stock_buy_pool(),
+            "casino_pool_lamports": read_casino_pool(),
+            "next_casino_ts": _read_marker(_LAST_CASINO_PATH) + config.CASINO_INTERVAL_SECONDS,
             "stock_mints": [str(m) for m in config.STOCK_MINTS],
         }
     )
@@ -478,6 +568,11 @@ def tick() -> None:
     if now - last_claim >= config.CLAIM_INTERVAL_SECONDS:
         _claim_cut_split()
         _write_last_claim_ts(now)
+
+    # 5b. Casino draw — its OWN fast gate (one winner = one tx, so a 5-minute
+    #     cadence is cheap). Runs regardless of the airdrop gate below.
+    if now - _read_marker(_LAST_CASINO_PATH) >= config.CASINO_INTERVAL_SECONDS:
+        _casino_draw(casino_candidates, now)
 
     # 6. Airdrops — gated separately so payouts are batched. Three legs, each
     #    computed against its LIVE on-wallet pool (never a DB sum).
@@ -497,7 +592,9 @@ def tick() -> None:
     if sol_pool > 0:
         try:
             balance = rpc.get_sol_balance(str(config.WALLET_PUBKEY))
-            available = balance - config.GAS_FLOOR_LAMPORTS - read_ad_reserve()
+            # Floor + ad reserve + the casino pot all live on this wallet too —
+            # the SOL airdrop must never spend their share (and vice versa).
+            available = balance - config.GAS_FLOOR_LAMPORTS - read_ad_reserve() - read_casino_pool()
             to_pay = min(sol_pool, config.MAX_SOL_AIRDROP_LAMPORTS, max(0, available))
             if to_pay > 0:
                 res = dist.distribute_sol(to_pay, payout_weights)

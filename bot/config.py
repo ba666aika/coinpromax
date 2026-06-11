@@ -73,15 +73,19 @@ except Exception as exc:
 
 # === Distribution math (Coin Pro Max split) ===
 # 20% SOL → operator (dev cut, separate wallet);
-# 30% SOL → ad-bounty reserve: STAYS on the bot wallet, the bot never spends
+# 20% SOL → ad-bounty reserve: STAYS on the bot wallet, the bot never spends
 #           it (the operator's manual ad budget) — tracked for stats only;
+# 10% SOL → CASINO (lvl 4): pools up, and every CASINO_INTERVAL one
+#           weighted-random wallet that completed ALL previous levels
+#           (hold + call-out + bullpost) wins the pool;
 # 50% SOL → reward pool, split evenly three ways:
 #           SOL airdrop / $CPM buyback→airdrop / xStocks basket→airdrop.
 OPERATOR_PCT = _float("OPERATOR_PCT", 0.20)
-AD_RESERVE_PCT = _float("AD_RESERVE_PCT", 0.30)
+AD_RESERVE_PCT = _float("AD_RESERVE_PCT", 0.20)
+CASINO_PCT = _float("CASINO_PCT", 0.10)
 REWARD_PCT = _float("REWARD_PCT", 0.50)
-if abs((OPERATOR_PCT + AD_RESERVE_PCT + REWARD_PCT) - 1.0) > 1e-6:
-    print("[config] FATAL: OPERATOR_PCT + AD_RESERVE_PCT + REWARD_PCT must sum to 1.0", file=sys.stderr)
+if abs((OPERATOR_PCT + AD_RESERVE_PCT + CASINO_PCT + REWARD_PCT) - 1.0) > 1e-6:
+    print("[config] FATAL: OPERATOR_PCT + AD_RESERVE_PCT + CASINO_PCT + REWARD_PCT must sum to 1.0", file=sys.stderr)
     sys.exit(2)
 
 # Hard cap on a single buyback. SECURITY: regardless of claimed amount,
@@ -175,6 +179,21 @@ SOL_POOL_PATH = f"{DATA_DIR}/sol_pool.json"
 AD_RESERVE_PATH = f"{DATA_DIR}/ad_reserve.json"
 CPM_BUY_POOL_PATH = f"{DATA_DIR}/cpm_buy_pool.json"
 STOCK_BUY_POOL_PATH = f"{DATA_DIR}/stock_buy_pool.json"
+CASINO_POOL_PATH = f"{DATA_DIR}/casino_pool.json"
+
+# === Casino (lvl 4) ===
+# Every CASINO_INTERVAL_SECONDS one wallet that completed ALL previous levels
+# (eligible holder + callout + bullpost) wins the casino pool. The pick is
+# weighted-random by held_seconds × balance — same proportionality as every
+# other reward, and sybil-resistant (splitting a stack multiplies wallets but
+# not total tickets). One winner = one tx per draw, so a 5-min cadence is cheap.
+CASINO_INTERVAL_SECONDS = _int("CASINO_INTERVAL_SECONDS", 300)
+# Don't draw until the pot is worth more than the tx overhead; below this the
+# pool just keeps growing (never lost).
+MIN_CASINO_DRAW_LAMPORTS = _int("MIN_CASINO_DRAW_LAMPORTS", 5_000_000)
+# Hard cap on a single win (last line of defense). Excess stays pooled for
+# the next draws.
+MAX_CASINO_PAYOUT_LAMPORTS = _int("MAX_CASINO_PAYOUT_LAMPORTS", 5_000_000_000)
 
 # === Tasks (Coin Pro Max levels) ===
 # Task "bullpost" — posted in the coin's community on coincommunities.org.

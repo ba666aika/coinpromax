@@ -216,6 +216,18 @@ def task_weights(state: dict[str, dict], task: str) -> dict[str, int]:
     }
 
 
+def casino_weights(state: dict[str, dict]) -> dict[str, int]:
+    """Lvl-4 (casino) ticket weights: eligible holders that completed ALL
+    previous levels — holding (weight > 0) AND callout AND bullpost. The values
+    are the same held_seconds × balance weights, used as lottery tickets."""
+    out: dict[str, int] = {}
+    for w, v in weighted_holdings(state).items():
+        tasks = state.get(w, {}).get("tasks") or {}
+        if "callout" in tasks and "bullpost" in tasks:
+            out[w] = v
+    return out
+
+
 def level_of(info: dict) -> int:
     """CPM level of one tracked wallet. Level 1 = an eligible holder with at
     least a tick of held time (buy & hold, no sells); +1 per completed task.
