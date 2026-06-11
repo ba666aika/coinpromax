@@ -2,13 +2,13 @@
 
 Coin Pro Max money flow per claim (claimed = measured wallet delta):
   20% → operator (dev cut, separate wallet)
-  30% → ad-bounty reserve: STAYS on this wallet, the bot never spends it
-  50% → reward pool, split evenly three ways:
-        ├─ SOL airdrop   → all eligible holders (lvl ≥ 1: buy & hold)
-        ├─ $CPM buyback  → holders who did the pump.fun call-out  (lvl task)
-        └─ xStocks basket→ holders who did the communities bullpost (lvl task)
-  Every airdrop is weighted by held_seconds × balance. ANY sell resets the
-  accumulated time (start over); task flags are sticky.
+  20% → ad-bounty reserve: STAYS on this wallet, the bot never spends it
+  15% → SOL airdrop pool    → all eligible holders (lvl ≥ 1: buy & hold)
+  15% → $CPM buyback pool   → holders who did the pump.fun call-out (lvl 2)
+  15% → xStocks basket pool → holders who did the communities bullpost (lvl 3)
+  15% → CASINO pot          → every 5 min ONE uniform-random lvl-4 wallet
+  Every airdrop is weighted by held_seconds × balance (casino is equal-odds).
+  ANY sell resets the accumulated time (start over); task flags are sticky.
 
 SAFETY MODEL (every rule here was paid for in real drained SOL):
   - Every on-chain READ is fail-CLOSED. RPCError → abort that step (or the whole
@@ -426,21 +426,21 @@ def _claim_cut_split() -> dict[str, int]:
         out["ad_reserve"] = ad_lamports
 
     # 2b) Casino pot (lvl 4): accumulates; paid out by _casino_draw on its own
-    #     5-minute gate to ONE weighted-random lvl-4 wallet.
+    #     5-minute gate to ONE uniform-random lvl-4 wallet.
     casino_lamports = int(claimed * config.CASINO_PCT)
     if casino_lamports > 0:
         _adjust_casino_pool(casino_lamports)
         out["casino"] = casino_lamports
 
-    # 3) Reward pool = the rest, split evenly into three ACCUMULATORS. Swaps
-    #    fire only once a pool clears MIN_SWAP_LAMPORTS, so micro-claims build
-    #    up instead of being burned on ~60k-lamport tx overhead per micro-swap.
-    reward = claimed - operator_lamports - ad_lamports - casino_lamports
-    if reward <= 0:
+    # 3) Per-level reward shares (explicit percentages). The last leg takes the
+    #    integer-truncation remainder so the split always sums to `claimed`
+    #    exactly. Swaps fire only once a pool clears MIN_SWAP_LAMPORTS, so
+    #    micro-claims build up instead of being burned on tx overhead.
+    sol_share = int(claimed * config.SOL_AIRDROP_PCT)
+    supply_share = int(claimed * config.SUPPLY_PCT)
+    stocks_share = claimed - operator_lamports - ad_lamports - casino_lamports - sol_share - supply_share
+    if sol_share <= 0 and supply_share <= 0 and stocks_share <= 0:
         return out
-    sol_share = reward // 3
-    supply_share = reward // 3
-    stocks_share = reward - sol_share - supply_share  # remainder → stocks leg
 
     # 3a) SOL airdrop accumulator (paid out on the airdrop gate, capped there).
     if sol_share > 0:

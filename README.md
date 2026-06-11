@@ -23,18 +23,17 @@ sell-punishment is the weight reset.
 ```
 20% → OPERATOR_WALLET (dev cut)
 20% → ad-bounty reserve — STAYS on the bot wallet, bot never spends it
-10% → CASINO pot (lvl 4): every 5 min ONE weighted-random wallet that
-      completed all previous levels wins the pot (≤ MAX_CASINO_PAYOUT_LAMPORTS;
-      draws skip until the pot ≥ MIN_CASINO_DRAW_LAMPORTS)
-50% → reward pool, split evenly:
-      ├─ SOL airdrop      (accumulates in /data/sol_pool.json, paid per window)
-      ├─ $CPM buyback     (PumpPortal, ≤ MAX_BUYBACK_LAMPORTS)
-      └─ xStocks basket   (Jupiter, 5 mints even split, ≤ MAX_STOCK_BASKET_LAMPORTS)
+15% → lvl 1: SOL airdrop     (accumulates in /data/sol_pool.json, paid per window)
+15% → lvl 2: $CPM buyback    (PumpPortal, ≤ MAX_BUYBACK_LAMPORTS)
+15% → lvl 3: xStocks basket  (Jupiter, 5 mints even split, ≤ MAX_STOCK_BASKET_LAMPORTS)
+15% → lvl 4: CASINO pot — every 5 min ONE uniform-random wallet that completed
+      all previous levels wins the pot (≤ MAX_CASINO_PAYOUT_LAMPORTS; draws
+      skip until the pot ≥ MIN_CASINO_DRAW_LAMPORTS)
 ```
 
-Casino odds are weighted by the same `held_seconds × balance` tickets as every
-other reward (proportional AND sybil-resistant: splitting a stack multiplies
-wallets, not tickets).
+The casino draw is UNIFORM — one ticket per eligible wallet, size irrelevant.
+The eligibility bar (min holding + own call-out + own bullpost) is the
+anti-sybil cost. Airdrops stay proportional to `held_seconds × balance`.
 
 Stocks basket default (verified live routes, override via `STOCK_MINTS`):
 CRCLx, SPYx, QQQx, TSLAx, NVDAx — top-5 genuine xStocks by Jupiter 24h volume.

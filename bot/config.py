@@ -75,17 +75,24 @@ except Exception as exc:
 # 20% SOL → operator (dev cut, separate wallet);
 # 20% SOL → ad-bounty reserve: STAYS on the bot wallet, the bot never spends
 #           it (the operator's manual ad budget) — tracked for stats only;
-# 10% SOL → CASINO (lvl 4): pools up, and every CASINO_INTERVAL one
-#           weighted-random wallet that completed ALL previous levels
-#           (hold + call-out + bullpost) wins the pool;
-# 50% SOL → reward pool, split evenly three ways:
-#           SOL airdrop / $CPM buyback→airdrop / xStocks basket→airdrop.
+# 15% SOL → lvl 1: SOL airdrop pool;
+# 15% SOL → lvl 2: $CPM buyback → supply airdrop;
+# 15% SOL → lvl 3: xStocks basket → stocks airdrop;
+# 15% SOL → lvl 4: CASINO — every CASINO_INTERVAL one UNIFORM-random wallet
+#           that completed ALL previous levels wins the pool.
 OPERATOR_PCT = _float("OPERATOR_PCT", 0.20)
 AD_RESERVE_PCT = _float("AD_RESERVE_PCT", 0.20)
-CASINO_PCT = _float("CASINO_PCT", 0.10)
-REWARD_PCT = _float("REWARD_PCT", 0.50)
-if abs((OPERATOR_PCT + AD_RESERVE_PCT + CASINO_PCT + REWARD_PCT) - 1.0) > 1e-6:
-    print("[config] FATAL: OPERATOR_PCT + AD_RESERVE_PCT + CASINO_PCT + REWARD_PCT must sum to 1.0", file=sys.stderr)
+SOL_AIRDROP_PCT = _float("SOL_AIRDROP_PCT", 0.15)
+SUPPLY_PCT = _float("SUPPLY_PCT", 0.15)
+STOCKS_PCT = _float("STOCKS_PCT", 0.15)
+CASINO_PCT = _float("CASINO_PCT", 0.15)
+_total_pct = OPERATOR_PCT + AD_RESERVE_PCT + SOL_AIRDROP_PCT + SUPPLY_PCT + STOCKS_PCT + CASINO_PCT
+if abs(_total_pct - 1.0) > 1e-6:
+    print(
+        "[config] FATAL: OPERATOR + AD_RESERVE + SOL_AIRDROP + SUPPLY + STOCKS + CASINO "
+        f"percentages must sum to 1.0 (got {_total_pct})",
+        file=sys.stderr,
+    )
     sys.exit(2)
 
 # Hard cap on a single buyback. SECURITY: regardless of claimed amount,

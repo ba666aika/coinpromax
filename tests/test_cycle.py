@@ -199,10 +199,10 @@ class _CycleBase(unittest.TestCase):
 
 class TestSplitAndCap(_CycleBase):
     """claimed = 1 SOL → operator 0.20, ad reserve 0.20 (booked, not moved),
-    casino 0.10 (pooled), reward 0.50 split evenly into accumulators:
-    sol_pool / buyback / basket."""
+    then 15% each into the four level accumulators: sol_pool / buyback /
+    basket / casino."""
 
-    def test_full_split_20_20_10_50(self):
+    def test_full_split_20_20_15x4(self):
         owner = _wallet()
         self._seed({owner: 100})
         with self._harness(before=_SOL, after=2 * _SOL, holders=self._holders({owner: 100})) as m:
@@ -213,31 +213,30 @@ class TestSplitAndCap(_CycleBase):
         self.assertIn("operator_cut(200000000)", m.build_and_send.call_args.kwargs["label"])
         # Ad reserve + casino pot booked, stay on wallet.
         self.assertEqual(cycle.read_ad_reserve(), 200_000_000)
-        self.assertEqual(cycle.read_casino_pool(), 100_000_000)
-        # Reward 500M → thirds: sol_pool 166,666,666 / buyback same / stocks remainder.
-        self.assertEqual(cycle.read_sol_pool(), 166_666_666)
-        m.buyback.assert_called_once_with(166_666_666)
-        m.buy_basket.assert_called_once_with(166_666_668)
-        # Successful swaps decrement their pools: buyback fully spent; the
-        # basket spends per_leg×5 and the division remainder (3) stays pooled.
+        self.assertEqual(cycle.read_casino_pool(), 150_000_000)
+        # 15% per reward leg.
+        self.assertEqual(cycle.read_sol_pool(), 150_000_000)
+        m.buyback.assert_called_once_with(150_000_000)
+        m.buy_basket.assert_called_once_with(150_000_000)
+        # Successful swaps fully drain their pools (150M divides evenly by 5).
         self.assertEqual(cycle.read_cpm_buy_pool(), 0)
-        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668 - (166_666_668 // 5) * 5)
+        self.assertEqual(cycle.read_stock_buy_pool(), 0)
 
     def test_micro_claim_accumulates_without_swapping(self):
         """Shares below MIN_SWAP_LAMPORTS pool up instead of burning tx fees
         on micro-swaps. Nothing is lost — the next claim adds on top."""
         owner = _wallet()
         self._seed({owner: 100})
-        # claimed = 3M lamports → reward 1.5M → thirds 500k each < 5M min.
+        # claimed = 3M lamports → 15% legs = 450k each, all < 5M min swap.
         with self._harness(before=_SOL, after=_SOL + 3_000_000, holders=self._holders({owner: 100})) as m:
             cycle._write_last_airdrop_ts(int(time.time()))
             cycle.tick()
         m.buyback.assert_not_called()
         m.buy_basket.assert_not_called()
-        self.assertEqual(cycle.read_cpm_buy_pool(), 500_000)
-        self.assertEqual(cycle.read_stock_buy_pool(), 500_000)
-        self.assertEqual(cycle.read_sol_pool(), 500_000)
-        self.assertEqual(cycle.read_casino_pool(), 300_000)
+        self.assertEqual(cycle.read_cpm_buy_pool(), 450_000)
+        self.assertEqual(cycle.read_stock_buy_pool(), 450_000)
+        self.assertEqual(cycle.read_sol_pool(), 450_000)
+        self.assertEqual(cycle.read_casino_pool(), 450_000)
 
     def test_failed_swap_keeps_budget_pooled(self):
         owner = _wallet()
@@ -248,8 +247,8 @@ class TestSplitAndCap(_CycleBase):
             cycle._write_last_airdrop_ts(int(time.time()))
             cycle.tick()
         # Budgets stay pooled for retry on the next claim window.
-        self.assertEqual(cycle.read_cpm_buy_pool(), 166_666_666)
-        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668)
+        self.assertEqual(cycle.read_cpm_buy_pool(), 150_000_000)
+        self.assertEqual(cycle.read_stock_buy_pool(), 150_000_000)
 
     def test_buyback_hard_cap_is_absolute(self):
         owner = _wallet()
@@ -258,10 +257,10 @@ class TestSplitAndCap(_CycleBase):
             with self._harness(before=_SOL, after=2 * _SOL, holders=self._holders({owner: 100})) as m:
                 cycle._write_last_airdrop_ts(int(time.time()))
                 cycle.tick()
-        # supply share = 166,666,666 but cap = 100M → buyback clamped to 100M;
+        # supply share = 150M but cap = 100M → buyback clamped to 100M;
         # the excess stays POOLED (carryover via accumulator, not lost).
         m.buyback.assert_called_once_with(100_000_000)
-        self.assertEqual(cycle.read_cpm_buy_pool(), 66_666_666)
+        self.assertEqual(cycle.read_cpm_buy_pool(), 50_000_000)
 
     def test_stock_basket_hard_cap_is_absolute(self):
         owner = _wallet()
@@ -272,7 +271,7 @@ class TestSplitAndCap(_CycleBase):
                 cycle.tick()
         m.buy_basket.assert_called_once_with(50_000_000)
         # spent = (50M // 5) × 5 = 50M; the rest of the share stays pooled.
-        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668 - 50_000_000)
+        self.assertEqual(cycle.read_stock_buy_pool(), 150_000_000 - 50_000_000)
 
     def test_operator_paid_before_reward_legs(self):
         owner = _wallet()

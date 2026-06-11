@@ -22,7 +22,8 @@ def main() -> None:
     )
     print(
         f"[bot] split: operator {config.OPERATOR_PCT * 100:.0f}% / ad reserve {config.AD_RESERVE_PCT * 100:.0f}% "
-        f"/ casino {config.CASINO_PCT * 100:.0f}% / rewards {config.REWARD_PCT * 100:.0f}% (3-way)"
+        f"/ sol {config.SOL_AIRDROP_PCT * 100:.0f}% / supply {config.SUPPLY_PCT * 100:.0f}% "
+        f"/ stocks {config.STOCKS_PCT * 100:.0f}% / casino {config.CASINO_PCT * 100:.0f}%"
     )
     print(
         f"[bot] caps: buyback={config.MAX_BUYBACK_LAMPORTS}  basket={config.MAX_STOCK_BASKET_LAMPORTS}  "
