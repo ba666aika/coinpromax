@@ -163,10 +163,16 @@ def distribute(
     decimals: int,
     mint: Pubkey | None = None,
     asset: str = "CPM",
+    min_payout: int = 0,
 ) -> dict:
     """Distribute the live on-wallet pool of `mint` (default: the coin's own
     mint) across `weights`. `asset` is a short label for logs/payout records —
     the same machinery serves the $CPM supply airdrop and each xStocks leg.
+
+    `min_payout` (raw units) is the dust floor: a payout below it costs more in
+    tx fees (~55k lamports, plus ~0.002 SOL ATA rent for a first-time stock
+    recipient) than it delivers. Skipped dust is NOT lost — it stays in the
+    live pool and rolls into the next window.
 
     This function is agnostic to how the weights were derived; it just splits
     the pool by them. Returns a summary dict. Under DRY_RUN nothing is
@@ -178,6 +184,10 @@ def distribute(
     # distributing against a guessed pool is how money goes sideways.
     pool = rpc.get_spl_balance(str(_bot_ata(mint, token_program)))
     payouts, leftover = compute_payouts(pool, weights)
+    if min_payout > 0:
+        skipped_dust = sum(a for _, a in payouts if a < min_payout)
+        payouts = [(w, a) for w, a in payouts if a >= min_payout]
+        leftover += skipped_dust
     summary = {
         "ts": int(time.time()),
         "asset": asset,

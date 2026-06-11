@@ -40,6 +40,9 @@ _STATE_FILES = (
     "callout_allowlist.json",   # callout manual allowlist
     "sol_pool.json",            # SOL-airdrop accumulator (new coin = new wallet = fresh books)
     "ad_reserve.json",          # ad-bounty reserve accounting
+    "cpm_buy_pool.json",        # buyback budget accumulator
+    "stock_buy_pool.json",      # stock-basket budget accumulator
+    "last_stocks_airdrop_at.txt",
 )
 
 

@@ -55,6 +55,8 @@ class _CycleBase(unittest.TestCase):
             "PAYOUTS_PATH": config.PAYOUTS_PATH,
             "SOL_POOL_PATH": config.SOL_POOL_PATH,
             "AD_RESERVE_PATH": config.AD_RESERVE_PATH,
+            "CPM_BUY_POOL_PATH": config.CPM_BUY_POOL_PATH,
+            "STOCK_BUY_POOL_PATH": config.STOCK_BUY_POOL_PATH,
             "DATA_DIR": config.DATA_DIR,
             "DRY_RUN": config.DRY_RUN,
         }
@@ -64,11 +66,15 @@ class _CycleBase(unittest.TestCase):
         config.PAYOUTS_PATH = os.path.join(self.tmp, "payouts.jsonl")
         config.SOL_POOL_PATH = os.path.join(self.tmp, "sol_pool.json")
         config.AD_RESERVE_PATH = os.path.join(self.tmp, "ad_reserve.json")
+        config.CPM_BUY_POOL_PATH = os.path.join(self.tmp, "cpm_buy_pool.json")
+        config.STOCK_BUY_POOL_PATH = os.path.join(self.tmp, "stock_buy_pool.json")
         config.DRY_RUN = False
         self._orig_marker = cycle._LAST_AIRDROP_PATH
         cycle._LAST_AIRDROP_PATH = os.path.join(self.tmp, "last_airdrop_at.txt")
         self._orig_claim_marker = cycle._LAST_CLAIM_PATH
         cycle._LAST_CLAIM_PATH = os.path.join(self.tmp, "last_claim_at.txt")
+        self._orig_stocks_marker = cycle._LAST_STOCKS_AIRDROP_PATH
+        cycle._LAST_STOCKS_AIRDROP_PATH = os.path.join(self.tmp, "last_stocks_airdrop_at.txt")
         cycle._pool_owners.clear()
         cycle._classified_owners.clear()
         cycle._last_tasks_fetch_ts = 0
@@ -78,6 +84,7 @@ class _CycleBase(unittest.TestCase):
             setattr(config, k, v)
         cycle._LAST_AIRDROP_PATH = self._orig_marker
         cycle._LAST_CLAIM_PATH = self._orig_claim_marker
+        cycle._LAST_STOCKS_AIRDROP_PATH = self._orig_stocks_marker
 
     # -- helpers --
 
@@ -164,8 +171,13 @@ class _CycleBase(unittest.TestCase):
             if op_exc:
                 ba = mock.patch.object(cycle.stx, "build_and_send", side_effect=op_exc)
             m.build_and_send = p(ba)
-            m.buyback = p(mock.patch.object(cycle.swap, "buyback", return_value=None))
-            m.buy_basket = p(mock.patch.object(cycle.stocks, "buy_basket", return_value=[]))
+            # Swaps "succeed" by default (sig / one sig per basket leg) so the
+            # buy-pools decrement like a real successful submit.
+            m.buyback = p(mock.patch.object(cycle.swap, "buyback", return_value="sig"))
+            m.buy_basket = p(mock.patch.object(
+                cycle.stocks, "buy_basket",
+                side_effect=lambda lamports: [f"sig{i}" for i in range(len(config.STOCK_MINTS))],
+            ))
             m.distribute = p(mock.patch.object(cycle.dist, "distribute", return_value={}))
             m.distribute_sol = p(mock.patch.object(cycle.dist, "distribute_sol", return_value={}))
             # Task feeds: never hit the network from tests.
@@ -182,7 +194,7 @@ class _CycleBase(unittest.TestCase):
 
 class TestSplitAndCap(_CycleBase):
     """claimed = 1 SOL → operator 0.20, ad reserve 0.30 (booked, not moved),
-    reward 0.50 split evenly: sol_pool / buyback / stock basket."""
+    reward 0.50 split evenly into accumulators: sol_pool / buyback / basket."""
 
     def test_full_split_20_30_50(self):
         owner = _wallet()
@@ -199,6 +211,37 @@ class TestSplitAndCap(_CycleBase):
         self.assertEqual(cycle.read_sol_pool(), 166_666_666)
         m.buyback.assert_called_once_with(166_666_666)
         m.buy_basket.assert_called_once_with(166_666_668)
+        # Successful swaps decrement their pools: buyback fully spent; the
+        # basket spends per_leg×5 and the division remainder (3) stays pooled.
+        self.assertEqual(cycle.read_cpm_buy_pool(), 0)
+        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668 - (166_666_668 // 5) * 5)
+
+    def test_micro_claim_accumulates_without_swapping(self):
+        """Shares below MIN_SWAP_LAMPORTS pool up instead of burning tx fees
+        on micro-swaps. Nothing is lost — the next claim adds on top."""
+        owner = _wallet()
+        self._seed({owner: 100})
+        # claimed = 3M lamports → reward 1.5M → thirds 500k each < 5M min.
+        with self._harness(before=_SOL, after=_SOL + 3_000_000, holders=self._holders({owner: 100})) as m:
+            cycle._write_last_airdrop_ts(int(time.time()))
+            cycle.tick()
+        m.buyback.assert_not_called()
+        m.buy_basket.assert_not_called()
+        self.assertEqual(cycle.read_cpm_buy_pool(), 500_000)
+        self.assertEqual(cycle.read_stock_buy_pool(), 500_000)
+        self.assertEqual(cycle.read_sol_pool(), 500_000)
+
+    def test_failed_swap_keeps_budget_pooled(self):
+        owner = _wallet()
+        self._seed({owner: 100})
+        with self._harness(before=_SOL, after=2 * _SOL, holders=self._holders({owner: 100})) as m:
+            m.buyback.return_value = None      # swap failed on all pools
+            m.buy_basket.side_effect = lambda lamports: []  # every leg failed
+            cycle._write_last_airdrop_ts(int(time.time()))
+            cycle.tick()
+        # Budgets stay pooled for retry on the next claim window.
+        self.assertEqual(cycle.read_cpm_buy_pool(), 166_666_666)
+        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668)
 
     def test_buyback_hard_cap_is_absolute(self):
         owner = _wallet()
@@ -207,8 +250,10 @@ class TestSplitAndCap(_CycleBase):
             with self._harness(before=_SOL, after=2 * _SOL, holders=self._holders({owner: 100})) as m:
                 cycle._write_last_airdrop_ts(int(time.time()))
                 cycle.tick()
-        # supply share = 166,666,666 but cap = 100M → buyback clamped to 100M.
+        # supply share = 166,666,666 but cap = 100M → buyback clamped to 100M;
+        # the excess stays POOLED (carryover via accumulator, not lost).
         m.buyback.assert_called_once_with(100_000_000)
+        self.assertEqual(cycle.read_cpm_buy_pool(), 66_666_666)
 
     def test_stock_basket_hard_cap_is_absolute(self):
         owner = _wallet()
@@ -218,6 +263,8 @@ class TestSplitAndCap(_CycleBase):
                 cycle._write_last_airdrop_ts(int(time.time()))
                 cycle.tick()
         m.buy_basket.assert_called_once_with(50_000_000)
+        # spent = (50M // 5) × 5 = 50M; the rest of the share stays pooled.
+        self.assertEqual(cycle.read_stock_buy_pool(), 166_666_668 - 50_000_000)
 
     def test_operator_paid_before_reward_legs(self):
         owner = _wallet()
@@ -377,6 +424,21 @@ class TestDistributeGating(_CycleBase):
         self.assertTrue(all(a.startswith("STOCK:") for a in assets))
         mints = {str(c.kwargs["mint"]) for c in m.distribute.call_args_list}
         self.assertEqual(mints, {str(mm) for mm in config.STOCK_MINTS})
+        # the stocks leg consumed ITS marker too
+        self.assertGreater(cycle._read_marker(cycle._LAST_STOCKS_AIRDROP_PATH), 0)
+
+    def test_stocks_leg_has_its_own_slower_gate(self):
+        """The expensive 5-tx-per-holder stocks leg must NOT fire every CPM/SOL
+        window — it waits for STOCKS_AIRDROP_INTERVAL_SECONDS."""
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"))
+        with self._harness(holders=self._holders({owner: 100})) as m:
+            cycle._write_last_airdrop_ts(0)                                   # main gate due
+            cycle._write_marker(cycle._LAST_STOCKS_AIRDROP_PATH, int(time.time()))  # stocks NOT due
+            cycle.tick()
+        # CPM leg ran; no stock mints distributed.
+        assets = [c.kwargs.get("asset") for c in m.distribute.call_args_list]
+        self.assertEqual(assets, ["CPM"])
 
     def test_dry_run_does_not_advance_marker(self):
         owner = _wallet()

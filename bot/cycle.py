@@ -60,6 +60,7 @@ from .rpc import RPCError
 # -------- state markers --------
 
 _LAST_AIRDROP_PATH = f"{config.DATA_DIR}/last_airdrop_at.txt"
+_LAST_STOCKS_AIRDROP_PATH = f"{config.DATA_DIR}/last_stocks_airdrop_at.txt"
 _LAST_CLAIM_PATH = f"{config.DATA_DIR}/last_claim_at.txt"
 
 # Throttle for the external task APIs (allowlist files are read every tick).
@@ -139,36 +140,52 @@ def _add_ad_reserve(lamports: int) -> None:
     _write_counter(config.AD_RESERVE_PATH, "lamports", read_ad_reserve() + lamports)
 
 
-def _read_last_airdrop_ts() -> int:
+def read_cpm_buy_pool() -> int:
+    return _read_counter(config.CPM_BUY_POOL_PATH, "lamports")
+
+
+def _adjust_cpm_buy_pool(delta: int) -> None:
+    _write_counter(config.CPM_BUY_POOL_PATH, "lamports", read_cpm_buy_pool() + delta)
+
+
+def read_stock_buy_pool() -> int:
+    return _read_counter(config.STOCK_BUY_POOL_PATH, "lamports")
+
+
+def _adjust_stock_buy_pool(delta: int) -> None:
+    _write_counter(config.STOCK_BUY_POOL_PATH, "lamports", read_stock_buy_pool() + delta)
+
+
+def _read_marker(path: str) -> int:
     try:
-        with open(_LAST_AIRDROP_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return int(f.read().strip() or "0")
     except (FileNotFoundError, ValueError):
         return 0
+
+
+def _write_marker(path: str, ts: int) -> None:
+    os.makedirs(config.DATA_DIR, exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(str(ts))
+    os.replace(tmp, path)
+
+
+def _read_last_airdrop_ts() -> int:
+    return _read_marker(_LAST_AIRDROP_PATH)
 
 
 def _write_last_airdrop_ts(ts: int) -> None:
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    tmp = f"{_LAST_AIRDROP_PATH}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(str(ts))
-    os.replace(tmp, _LAST_AIRDROP_PATH)
+    _write_marker(_LAST_AIRDROP_PATH, ts)
 
 
 def _read_last_claim_ts() -> int:
-    try:
-        with open(_LAST_CLAIM_PATH, "r", encoding="utf-8") as f:
-            return int(f.read().strip() or "0")
-    except (FileNotFoundError, ValueError):
-        return 0
+    return _read_marker(_LAST_CLAIM_PATH)
 
 
 def _write_last_claim_ts(ts: int) -> None:
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    tmp = f"{_LAST_CLAIM_PATH}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(str(ts))
-    os.replace(tmp, _LAST_CLAIM_PATH)
+    _write_marker(_LAST_CLAIM_PATH, ts)
 
 
 # -------- pool auto-detection (never pay an AMM/LP pool) --------
@@ -340,7 +357,9 @@ def _claim_cut_split() -> dict[str, int]:
         _add_ad_reserve(ad_lamports)
         out["ad_reserve"] = ad_lamports
 
-    # 3) Reward pool = the rest, split evenly three ways.
+    # 3) Reward pool = the rest, split evenly into three ACCUMULATORS. Swaps
+    #    fire only once a pool clears MIN_SWAP_LAMPORTS, so micro-claims build
+    #    up instead of being burned on ~60k-lamport tx overhead per micro-swap.
     reward = claimed - operator_lamports - ad_lamports
     if reward <= 0:
         return out
@@ -352,29 +371,31 @@ def _claim_cut_split() -> dict[str, int]:
     if sol_share > 0:
         _add_sol_pool(sol_share)
         out["sol_pool"] = sol_share
+    if supply_share > 0:
+        _adjust_cpm_buy_pool(supply_share)
+    if stocks_share > 0:
+        _adjust_stock_buy_pool(stocks_share)
 
-    # 3b) $CPM buyback, hard-capped. Excess above the cap stays in the wallet
-    #     (no carryover — logged so it's visible, never silently moved).
-    buyback_lamports = min(supply_share, config.MAX_BUYBACK_LAMPORTS)
-    if buyback_lamports < supply_share:
-        print(
-            f"[cycle] WARNING: buyback capped at {config.MAX_BUYBACK_LAMPORTS} "
-            f"(wanted {supply_share}); {supply_share - buyback_lamports} lamports stay in wallet"
-        )
-    if buyback_lamports > 0:
-        swap.buyback(buyback_lamports)
-        out["buyback"] = buyback_lamports
+    # 3b) $CPM buyback from its pool, hard-capped. Decrement ONLY on a
+    #     successful submit — a failed swap leaves the budget pooled for retry.
+    buy_pool = read_cpm_buy_pool()
+    if buy_pool >= config.MIN_SWAP_LAMPORTS:
+        buyback_lamports = min(buy_pool, config.MAX_BUYBACK_LAMPORTS)
+        if swap.buyback(buyback_lamports) is not None:
+            _adjust_cpm_buy_pool(-buyback_lamports)
+            out["buyback"] = buyback_lamports
 
-    # 3c) xStocks basket, hard-capped (the module re-caps internally too).
-    basket_lamports = min(stocks_share, config.MAX_STOCK_BASKET_LAMPORTS)
-    if basket_lamports < stocks_share:
-        print(
-            f"[cycle] WARNING: stock basket capped at {config.MAX_STOCK_BASKET_LAMPORTS} "
-            f"(wanted {stocks_share}); {stocks_share - basket_lamports} lamports stay in wallet"
-        )
-    if basket_lamports > 0:
-        stocks.buy_basket(basket_lamports)
-        out["stocks"] = basket_lamports
+    # 3c) xStocks basket from its pool, hard-capped (module re-caps too).
+    #     Decrement by the legs that actually submitted; failed legs stay pooled.
+    stock_pool = read_stock_buy_pool()
+    if stock_pool >= config.MIN_SWAP_LAMPORTS:
+        basket_lamports = min(stock_pool, config.MAX_STOCK_BASKET_LAMPORTS)
+        sigs = stocks.buy_basket(basket_lamports)
+        if sigs:
+            per_leg = basket_lamports // len(config.STOCK_MINTS)
+            spent = per_leg * len(sigs)
+            _adjust_stock_buy_pool(-spent)
+            out["stocks"] = spent
 
     print(
         f"[cycle] claimed={claimed} operator={out['operator']} ad_reserve={out['ad_reserve']} "
@@ -442,6 +463,8 @@ def tick() -> None:
             "lvl_bullpost_holders": len(bullpost_weights),
             "sol_pool_lamports": read_sol_pool(),
             "ad_reserve_lamports": read_ad_reserve(),
+            "cpm_buy_pool_lamports": read_cpm_buy_pool(),
+            "stock_buy_pool_lamports": read_stock_buy_pool(),
             "stock_mints": [str(m) for m in config.STOCK_MINTS],
         }
     )
@@ -486,7 +509,8 @@ def tick() -> None:
         except RPCError as exc:
             print(f"[cycle] SOL airdrop balance read failed (fail-CLOSED, skipping leg): {exc}")
 
-    # 6b. $CPM supply airdrop → holders who did the pump.fun call-out.
+    # 6b. $CPM supply airdrop → holders who did the pump.fun call-out. Dust
+    #     floor keeps fee burn sane; skipped dust rolls into the next window.
     try:
         decimals = rpc.get_token_decimals(str(config.LOYALTY_MINT))
         if callout_weights:
@@ -495,31 +519,38 @@ def tick() -> None:
                 token_program=Pubkey.from_string(token_program),
                 decimals=decimals,
                 asset="CPM",
+                min_payout=config.MIN_CPM_PAYOUT_RAW,
             )
         else:
             print("[cycle] supply airdrop: nobody with a call-out yet")
     except RPCError as exc:
         print(f"[cycle] supply airdrop failed (fail-CLOSED, skipping leg): {exc}")
 
-    # 6c. xStocks airdrop → holders who did the communities bullpost. Each of
-    #     the 5 stock mints distributes its full live on-wallet balance. A
-    #     failed mint skips just itself.
-    if bullpost_weights:
-        for stock_mint in config.STOCK_MINTS:
-            try:
-                sp = rpc.get_token_program(str(stock_mint))
-                sd = rpc.get_token_decimals(str(stock_mint))
-                dist.distribute(
-                    bullpost_weights,
-                    token_program=Pubkey.from_string(sp),
-                    decimals=sd,
-                    mint=stock_mint,
-                    asset=f"STOCK:{str(stock_mint)[:6]}",
-                )
-            except RPCError as exc:
-                print(f"[cycle] stock {stock_mint} airdrop failed (skipping this mint): {exc}")
-    else:
-        print("[cycle] stocks airdrop: nobody with a bullpost yet")
+    # 6c. xStocks airdrop → holders who did the communities bullpost. The
+    #     EXPENSIVE leg (5 txs per holder + ~0.002 SOL ATA rent per stock for a
+    #     first-time recipient) → its own, slower gate. A failed mint skips
+    #     just itself; tokens roll into the next stocks window.
+    last_stocks = _read_marker(_LAST_STOCKS_AIRDROP_PATH)
+    if now - last_stocks >= config.STOCKS_AIRDROP_INTERVAL_SECONDS:
+        if bullpost_weights:
+            for stock_mint in config.STOCK_MINTS:
+                try:
+                    sp = rpc.get_token_program(str(stock_mint))
+                    sd = rpc.get_token_decimals(str(stock_mint))
+                    dist.distribute(
+                        bullpost_weights,
+                        token_program=Pubkey.from_string(sp),
+                        decimals=sd,
+                        mint=stock_mint,
+                        asset=f"STOCK:{str(stock_mint)[:6]}",
+                        min_payout=config.MIN_STOCK_PAYOUT_RAW,
+                    )
+                except RPCError as exc:
+                    print(f"[cycle] stock {stock_mint} airdrop failed (skipping this mint): {exc}")
+            if not config.DRY_RUN:
+                _write_marker(_LAST_STOCKS_AIRDROP_PATH, now)
+        else:
+            print("[cycle] stocks airdrop: nobody with a bullpost yet")
 
     # Advance the marker on a real run only — a DRY_RUN must be repeatable and
     # must never consume the airdrop window.

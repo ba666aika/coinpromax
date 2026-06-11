@@ -119,12 +119,30 @@ DRY_RUN = (os.environ.get("DRY_RUN") or "0").strip().lower() in ("1", "true", "y
 
 # === Cadences ===
 # The tick (= holder snapshot / held_seconds) runs every CYCLE_INTERVAL_SECONDS —
-# kept short for fast sell-detection. Claim+cut+buyback and the airdrop each have
-# their OWN gate, so money moves less often than the snapshot. Distribute interval
-# should be a multiple of the tick so it lands on time (e.g. 10s tick → 300s = 5min).
+# kept short for fast sell-detection. Claim+cut+split and each airdrop have
+# their OWN gate, so money moves less often than the snapshot.
+#
+# FEE MATH (why CPM defaults are slower than USUG's): one airdrop window costs
+# up to 7 txs PER HOLDER (1 SOL + 1 $CPM + 5 stocks) × ~55k lamports each. At
+# 100 holders a 5-minute window would burn ~11 SOL/day in fees alone. Hourly
+# CPM/SOL windows + 6-hourly stocks windows cut that ~20×; nothing is lost —
+# pools accumulate and roll into the next window.
 CYCLE_INTERVAL_SECONDS = _int("CYCLE_INTERVAL_SECONDS", 10)      # snapshot holders every 10s
-CLAIM_INTERVAL_SECONDS = _int("CLAIM_INTERVAL_SECONDS", 60)      # claim fees + buyback every 1 min
-AIRDROP_INTERVAL_SECONDS = _int("AIRDROP_INTERVAL_SECONDS", 300)  # distribute every 5 min
+CLAIM_INTERVAL_SECONDS = _int("CLAIM_INTERVAL_SECONDS", 300)     # claim fees every 5 min (2 txs even when vault is empty)
+AIRDROP_INTERVAL_SECONDS = _int("AIRDROP_INTERVAL_SECONDS", 3600)   # SOL + $CPM legs: hourly
+# The stocks leg is the expensive one (5 txs per holder + ~0.002 SOL ATA rent
+# per stock per NEW recipient) → its own, slower gate.
+STOCKS_AIRDROP_INTERVAL_SECONDS = _int("STOCKS_AIRDROP_INTERVAL_SECONDS", 21600)  # 6h
+
+# Don't fire a swap until its accumulated budget is worth the ~60k-lamport tx
+# overhead. Shares below this keep accumulating in the buy-pools (never lost).
+MIN_SWAP_LAMPORTS = _int("MIN_SWAP_LAMPORTS", 5_000_000)  # 0.005 SOL ≈ 1.2% overhead
+
+# Dust floors for the SPL airdrops (mirror MIN_SOL_PAYOUT_LAMPORTS): paying a
+# holder less than this costs more in fees than it delivers. Skipped dust stays
+# in the live pool and rolls into the next window automatically.
+MIN_CPM_PAYOUT_RAW = _int("MIN_CPM_PAYOUT_RAW", 1_000_000)   # 1 token @ 6 decimals
+MIN_STOCK_PAYOUT_RAW = _int("MIN_STOCK_PAYOUT_RAW", 10_000)  # 1e-4 share @ 8 decimals
 
 # Slippage on buyback (bps). 100 = 1%.
 BUYBACK_SLIPPAGE_BPS = _int("BUYBACK_SLIPPAGE_BPS", 500)  # 5% — pump.fun is volatile
@@ -151,8 +169,12 @@ PAYOUTS_PATH = f"{DATA_DIR}/payouts.jsonl"
 # Accumulators (display + accounting). sol_pool is MONEY-CRITICAL: it is the
 # only part of the wallet's SOL the airdrop may pay out. ad_reserve is stats-only
 # (that SOL just sits on the wallet as the operator's manual ad budget).
+# cpm_buy_pool / stock_buy_pool collect the per-claim swap budgets until they
+# clear MIN_SWAP_LAMPORTS — so micro-claims aren't wasted on micro-swaps.
 SOL_POOL_PATH = f"{DATA_DIR}/sol_pool.json"
 AD_RESERVE_PATH = f"{DATA_DIR}/ad_reserve.json"
+CPM_BUY_POOL_PATH = f"{DATA_DIR}/cpm_buy_pool.json"
+STOCK_BUY_POOL_PATH = f"{DATA_DIR}/stock_buy_pool.json"
 
 # === Tasks (Coin Pro Max levels) ===
 # Task "bullpost" — posted in the coin's community on coincommunities.org.

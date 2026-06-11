@@ -46,6 +46,25 @@ the SOL airdrop treats it as untouchable and pays only
   tasks, share — the "check wallet" bar), `/api/board`, static `frontend/`.
 - `python -m bot` — the money loop.
 
+## Fees (why the cadences are what they are)
+
+One airdrop window costs up to **7 txs per holder** (1 SOL + 1 $CPM + 5 stocks)
+at ~55k lamports each; at 100 holders a USUG-style 5-minute window would burn
+**~11 SOL/day** on fees. Defaults therefore:
+
+- claim every 5 min (each claim pass = 2 txs even when the vault is empty)
+- SOL + $CPM airdrops hourly; **stocks every 6h** (the 5-tx leg, plus
+  ~0.002 SOL ATA rent per stock for each first-time recipient)
+- swaps fire only when the accumulated budget ≥ `MIN_SWAP_LAMPORTS` (0.005 SOL)
+  — micro-claims pool up in `/data/cpm_buy_pool.json` / `stock_buy_pool.json`
+  instead of being burned on micro-swap overhead
+- dust floors on every payout leg (`MIN_SOL_PAYOUT_LAMPORTS`,
+  `MIN_CPM_PAYOUT_RAW`, `MIN_STOCK_PAYOUT_RAW`) — paying a holder less than the
+  tx fee is a net loss; skipped dust rolls into the next window
+
+Nothing is dropped anywhere: every pool/floor DEFERS money, never discards it.
+Ballpark at 100 holders with these defaults: ~0.3–0.4 SOL/day total fee burn.
+
 ## Env (Railway Variables)
 
 Required: `WALLET_PRIVATE_KEY` (NEVER anywhere else), `HELIUS_API_KEY`,
