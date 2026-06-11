@@ -187,6 +187,10 @@ AD_RESERVE_PATH = f"{DATA_DIR}/ad_reserve.json"
 CPM_BUY_POOL_PATH = f"{DATA_DIR}/cpm_buy_pool.json"
 STOCK_BUY_POOL_PATH = f"{DATA_DIR}/stock_buy_pool.json"
 CASINO_POOL_PATH = f"{DATA_DIR}/casino_pool.json"
+# Lifetime counter of SOL actually spent on holders (SOL airdrops + casino wins
+# + buyback spends + stock-basket spends, all in lamports at spend time) — the
+# "distributed all-time" number on the site.
+TOTAL_DISTRIBUTED_PATH = f"{DATA_DIR}/total_distributed.json"
 
 # === Casino (lvl 4) ===
 # Every CASINO_INTERVAL_SECONDS one wallet that completed ALL previous levels

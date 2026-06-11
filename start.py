@@ -43,6 +43,7 @@ _STATE_FILES = (
     "cpm_buy_pool.json",        # buyback budget accumulator
     "stock_buy_pool.json",      # stock-basket budget accumulator
     "casino_pool.json",         # lvl-4 casino pot
+    "total_distributed.json",   # lifetime distributed counter
     "last_stocks_airdrop_at.txt",
     "last_casino_at.txt",
 )

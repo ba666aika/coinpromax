@@ -169,6 +169,16 @@ def _adjust_casino_pool(delta: int) -> None:
     _write_counter(config.CASINO_POOL_PATH, "lamports", read_casino_pool() + delta)
 
 
+def read_total_distributed() -> int:
+    """Lifetime SOL spent on holders (airdrops + casino + buybacks + baskets)."""
+    return _read_counter(config.TOTAL_DISTRIBUTED_PATH, "lamports")
+
+
+def _add_total_distributed(lamports: int) -> None:
+    if lamports > 0:
+        _write_counter(config.TOTAL_DISTRIBUTED_PATH, "lamports", read_total_distributed() + lamports)
+
+
 def _casino_draw(candidates: dict[str, int], now: int) -> None:
     """Lvl-4 casino: pay the whole pool (capped) to ONE random wallet that
     completed all previous levels — UNIFORM odds: every eligible wallet is one
@@ -216,6 +226,7 @@ def _casino_draw(candidates: dict[str, int], now: int) -> None:
         return
 
     _adjust_casino_pool(-payout)
+    _add_total_distributed(payout)
     dist._append_payouts_log([{
         "ts": now, "asset": "CASINO", "wallet": winner, "amount": payout,
         "sig": sig, "confirmed": True,
@@ -458,6 +469,7 @@ def _claim_cut_split() -> dict[str, int]:
         buyback_lamports = min(buy_pool, config.MAX_BUYBACK_LAMPORTS)
         if swap.buyback(buyback_lamports) is not None:
             _adjust_cpm_buy_pool(-buyback_lamports)
+            _add_total_distributed(buyback_lamports)
             out["buyback"] = buyback_lamports
 
     # 3c) xStocks basket from its pool, hard-capped (module re-caps too).
@@ -470,6 +482,7 @@ def _claim_cut_split() -> dict[str, int]:
             per_leg = basket_lamports // len(config.STOCK_MINTS)
             spent = per_leg * len(sigs)
             _adjust_stock_buy_pool(-spent)
+            _add_total_distributed(spent)
             out["stocks"] = spent
 
     print(
@@ -547,6 +560,7 @@ def tick() -> None:
             "cpm_buy_pool_lamports": read_cpm_buy_pool(),
             "stock_buy_pool_lamports": read_stock_buy_pool(),
             "casino_pool_lamports": read_casino_pool(),
+            "total_distributed_lamports": read_total_distributed(),
             "next_casino_ts": _read_marker(_LAST_CASINO_PATH) + config.CASINO_INTERVAL_SECONDS,
             "stock_mints": [str(m) for m in config.STOCK_MINTS],
         }
@@ -594,6 +608,7 @@ def tick() -> None:
                 actual = int(res.get("actual_sent", 0))
                 if actual > 0:
                     _sub_sol_pool(actual)
+                    _add_total_distributed(actual)
             else:
                 print(f"[cycle] SOL airdrop skipped: pool={sol_pool} but available={available}")
         except RPCError as exc:

@@ -58,6 +58,7 @@ class _CycleBase(unittest.TestCase):
             "CPM_BUY_POOL_PATH": config.CPM_BUY_POOL_PATH,
             "STOCK_BUY_POOL_PATH": config.STOCK_BUY_POOL_PATH,
             "CASINO_POOL_PATH": config.CASINO_POOL_PATH,
+            "TOTAL_DISTRIBUTED_PATH": config.TOTAL_DISTRIBUTED_PATH,
             "DATA_DIR": config.DATA_DIR,
             "DRY_RUN": config.DRY_RUN,
         }
@@ -70,6 +71,7 @@ class _CycleBase(unittest.TestCase):
         config.CPM_BUY_POOL_PATH = os.path.join(self.tmp, "cpm_buy_pool.json")
         config.STOCK_BUY_POOL_PATH = os.path.join(self.tmp, "stock_buy_pool.json")
         config.CASINO_POOL_PATH = os.path.join(self.tmp, "casino_pool.json")
+        config.TOTAL_DISTRIBUTED_PATH = os.path.join(self.tmp, "total_distributed.json")
         config.DRY_RUN = False
         self._orig_marker = cycle._LAST_AIRDROP_PATH
         cycle._LAST_AIRDROP_PATH = os.path.join(self.tmp, "last_airdrop_at.txt")
@@ -225,6 +227,8 @@ class TestSplitAndCap(_CycleBase):
         # Successful swaps fully drain their pools (150M divides evenly by 5).
         self.assertEqual(cycle.read_cpm_buy_pool(), 0)
         self.assertEqual(cycle.read_stock_buy_pool(), 0)
+        # Lifetime distributed counter: buyback 150M + basket 150M.
+        self.assertEqual(cycle.read_total_distributed(), 300_000_000)
 
     def test_micro_claim_accumulates_without_swapping(self):
         """Shares below MIN_SWAP_LAMPORTS pool up instead of burning tx fees
@@ -512,6 +516,7 @@ class TestSolAirdropLeg(_CycleBase):
         self.assertIn(owner, weights)
         # Pool decremented by exactly what CONFIRMED.
         self.assertEqual(cycle.read_sol_pool(), 250_000_000)
+        self.assertEqual(cycle.read_total_distributed(), 150_000_000)
 
     def test_respects_wallet_floor_and_ad_reserve(self):
         owner = _wallet()
@@ -578,6 +583,7 @@ class TestCasino(_CycleBase):
         m.build_and_send.assert_called_once()
         self.assertIn("casino_win(50000000)", m.build_and_send.call_args.kwargs["label"])
         self.assertEqual(cycle.read_casino_pool(), 0)
+        self.assertEqual(cycle.read_total_distributed(), 50_000_000)
         self.assertGreater(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
 
     def test_pick_is_uniform_one_ticket_per_wallet(self):

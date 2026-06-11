@@ -84,30 +84,30 @@
       gap: clamp(1.8rem, 4.5vh, 2.8rem);
     }
 
-    .intro {
-      text-align: center;
-      max-width: 680px;
+    /* live stats — Apple spec-highlight numbers */
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: clamp(1.6rem, 4.5vw, 3.8rem);
       padding: 0 6vw;
+      max-width: 900px;
     }
-    .intro-title {
+    .stat { text-align: center; min-width: 140px; }
+    .stat-v {
       color: #1d1d1f;
       font-weight: 600;
-      font-size: clamp(1.9rem, 4.5vw, 3.2rem);
+      font-size: clamp(1.7rem, 3.6vw, 2.7rem);
       letter-spacing: -0.03em;
-      line-height: 1.08;
-      margin-bottom: .55em;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
     }
-    .intro-body {
+    .stat-v .unit { font-size: .55em; font-weight: 600; color: #6e6e73; margin-left: .15em; }
+    .stat-l {
       color: #6e6e73;
-      font-size: clamp(1rem, 1.8vw, 1.22rem);
-      letter-spacing: -0.015em;
-      line-height: 1.5;
-      margin: 0 0 .55em;
-    }
-    .intro-sign {
-      color: #86868b;
-      font-size: .95rem;
-      margin-top: .9em;
+      font-size: .85rem;
+      letter-spacing: -0.01em;
+      margin-top: .3em;
     }
 
     /* "check wallet" — the iOS search pill */
@@ -399,10 +399,23 @@
   <!-- Page 3 — the pitch + wallet checker -->
   <section class="page page--note">
     <div class="note-stack">
-      <div class="intro">
-        <h2 class="intro-title">This is Coin Pro Max.</h2>
-        <p class="intro-body">It has everything. And even more. Four levels of rewards, each unlocked by a single task.</p>
-        <p class="intro-body">Fully automated, from the first claim to the last airdrop. Rewards simply arrive. Check your wallet to see exactly where you stand.</p>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-v" id="st-next">&mdash;</div>
+          <div class="stat-l">next airdrop</div>
+        </div>
+        <div class="stat">
+          <div class="stat-v" id="st-timer">&mdash;</div>
+          <div class="stat-l">until next airdrop</div>
+        </div>
+        <div class="stat">
+          <div class="stat-v" id="st-total">&mdash;</div>
+          <div class="stat-l">distributed all-time</div>
+        </div>
+        <div class="stat">
+          <div class="stat-v" id="st-holders">&mdash;</div>
+          <div class="stat-l">holders</div>
+        </div>
       </div>
 
       <div class="check">
@@ -527,6 +540,70 @@
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') check(input.value.trim());
       });
+
+      // ---- live stats (page 3) ----
+      // DEMO ticks plausible numbers; real mode polls GET /api/stats and
+      // counts the airdrop timer down locally between polls.
+      const st = {
+        next: document.getElementById('st-next'),
+        timer: document.getElementById('st-timer'),
+        total: document.getElementById('st-total'),
+        holders: document.getElementById('st-holders'),
+      };
+      const sol = (lam) => {
+        const v = lam / 1e9;
+        const txt = v >= 100 ? Math.round(v).toLocaleString('en-US') : v.toFixed(v >= 10 ? 1 : 2);
+        return txt + '<span class="unit">SOL</span>';
+      };
+      const fmtTimer = (s) => {
+        s = Math.max(0, Math.floor(s));
+        if (s >= 3600) return Math.floor(s / 3600) + ':' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      };
+
+      if (DEMO) {
+        let nextLam = rnd(2, 9) * 1e9 + rnd(0, 999) * 1e6;
+        let totalLam = rnd(140, 800) * 1e9;
+        let holders = rnd(350, 2400);
+        let dropAt = Date.now() / 1000 + rnd(180, 3500);
+        const paint = () => {
+          const left = dropAt - Date.now() / 1000;
+          if (left <= 0) {                       // airdrop "fires"
+            totalLam += nextLam;
+            nextLam = rnd(0, 2) * 1e9 + rnd(50, 950) * 1e6;
+            holders += rnd(0, 12);
+            dropAt = Date.now() / 1000 + 3600;
+          }
+          st.next.innerHTML = sol(nextLam);
+          st.total.innerHTML = sol(totalLam);
+          st.timer.textContent = fmtTimer(dropAt - Date.now() / 1000);
+          st.holders.textContent = holders.toLocaleString('en-US');
+        };
+        paint();
+        setInterval(paint, 1000);
+        setInterval(() => {                       // fees trickle in
+          nextLam += rnd(1, 40) * 1e6;
+          if (Math.random() < .35) holders += rnd(-1, 3);
+        }, 4000);
+      } else {
+        let dropAt = null;
+        const pull = async () => {
+          try {
+            const r = await fetch('/api/stats');
+            const d = await r.json();
+            const next = (d.sol_pool_lamports || 0) + (d.cpm_buy_pool_lamports || 0) + (d.stock_buy_pool_lamports || 0);
+            st.next.innerHTML = sol(next);
+            st.total.innerHTML = sol(d.total_distributed_lamports || 0);
+            st.holders.textContent = (d.eligible_holders || 0).toLocaleString('en-US');
+            dropAt = d.next_airdrop_ts || null;
+          } catch (e) { /* keep last values */ }
+        };
+        pull();
+        setInterval(pull, 15000);
+        setInterval(() => {
+          if (dropAt) st.timer.textContent = fmtTimer(dropAt - Date.now() / 1000);
+        }, 1000);
+      }
 
       // ---- level cards: black outline follows the click ----
       document.querySelectorAll('.lv-card').forEach((card) => {
