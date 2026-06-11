@@ -33,7 +33,7 @@
     }
 
     /* ---------- Page 1 — Apple, elegant ---------- */
-    .page--apple { background: #ffffff; }
+    .page--apple { background: #f5f5f7; }
     .wordmark {
       color: #1d1d1f;
       font-weight: 600;
@@ -74,7 +74,7 @@
 
     /* ---------- Page 2 — white wall: square post-it + Apple search ---------- */
     .page--note {
-      background: #ffffff;
+      background: #f5f5f7;
       align-items: flex-start;            /* push content toward the top */
       padding-top: clamp(7vh, 12vh, 15vh);
       padding-bottom: 6vh;
@@ -176,7 +176,6 @@
       background: #fff;
       border-radius: 18px;
       padding: 22px 22px 16px;
-      box-shadow: 0 2px 10px rgba(0,0,0,.05), 0 18px 44px rgba(0,0,0,.09);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
       color: #1d1d1f;
       text-align: left;
@@ -204,22 +203,34 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: .62em 0;
+      padding: .58em 0;
       border-top: .5px solid #e8e8ed;
       font-size: .95rem;
       letter-spacing: -0.01em;
     }
-    .cr-ic {
+    .cr-row > span:first-child { flex: 1; }
+    /* iOS Settings switch: gray off / green on */
+    .cr-sw {
       flex: none;
+      width: 42px; height: 26px;
+      border-radius: 13px;
+      background: #e9e9eb;
+      position: relative;
+      transition: background .25s ease;
+    }
+    .cr-sw::after {
+      content: "";
+      position: absolute;
+      top: 2px; left: 2px;
       width: 22px; height: 22px;
       border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: .68rem; font-weight: 700;
-      background: #e8e8ed; color: #aeaeb2;
+      background: #fff;
+      box-shadow: 0 2px 4px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.04);
+      transition: transform .25s cubic-bezier(.3,1.2,.4,1);
     }
-    .cr-ic.on { background: #34c759; color: #fff; }
+    .cr-sw.on { background: #34c759; }
+    .cr-sw.on::after { transform: translateX(16px); }
     .cr-stat {
-      margin-left: auto;
       color: #86868b;
       font-size: .85rem;
       font-variant-numeric: tabular-nums;
@@ -491,9 +502,9 @@
       };
       const row = (label, done, stat) =>
         '<div class="cr-row">' +
-        '<span class="cr-ic' + (done ? ' on' : '') + '">' + (done ? '&#10003;' : '') + '</span>' +
         '<span>' + label + '</span>' +
         (stat ? '<span class="cr-stat ' + stat[1] + '">' + stat[0] + '</span>' : '') +
+        '<span class="cr-sw' + (done ? ' on' : '') + '"></span>' +
         '</div>';
 
       function render(d) {
