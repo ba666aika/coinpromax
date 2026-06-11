@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Coin Pro Max</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Gochi+Hand&display=swap" rel="stylesheet">
-
   <style>
     :root { --rule: 44px; }
 
@@ -72,7 +68,7 @@
     }
     @keyframes bob { 0%,100% { transform: rotate(45deg) translateY(0); } 50% { transform: rotate(45deg) translateY(4px); } }
 
-    /* ---------- Page 2 — white wall: square post-it + Apple search ---------- */
+    /* ---------- Page 2 — the pitch, Apple-typeset + search ---------- */
     .page--note {
       background: #f5f5f7;
       align-items: flex-start;            /* push content toward the top */
@@ -83,69 +79,36 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: clamp(2.2rem, 6vh, 3.6rem);
+      gap: clamp(1.8rem, 4.5vh, 2.8rem);
     }
 
-    /* the post-it: SQUARE, glued at the top, bottom lifts off the wall */
-    .sticky {
-      position: relative;
-      width: clamp(300px, 40vw, 400px);
-      aspect-ratio: 1 / 1;
-      padding: clamp(24px, 3vw, 34px);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      /* flat, even sticker colour — no dark gradient at the bottom */
-      background: #dbed53;
-      transform: rotate(-1.4deg);
-      /* clean Miro-style shadow: soft, neutral, weighted toward the bottom */
-      box-shadow:
-        0 1px 2px rgba(35,45,10,.14),
-        0 12px 22px -8px rgba(35,45,10,.22);
+    .intro {
+      text-align: center;
+      max-width: 680px;
+      padding: 0 6vw;
     }
-    /* a small soft pool under the bottom edge — the slight lift off the wall */
-    .sticky::before {
-      content: "";
-      position: absolute;
-      left: 7%; right: 7%;
-      bottom: 5px;
-      height: 16px;
-      background: rgba(35,45,10,.24);
-      filter: blur(11px);
-      border-radius: 50%;
-      z-index: -1;
-      pointer-events: none;
+    .intro-title {
+      color: #1d1d1f;
+      font-weight: 600;
+      font-size: clamp(1.9rem, 4.5vw, 3.2rem);
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+      margin-bottom: .55em;
     }
-    .note-text { position: relative; z-index: 1; }
-    .note-text .sig {
-      display: block;
-      text-align: right;
-      margin-top: .35em;
-      transform: rotate(-1deg);
+    .intro-body {
+      color: #6e6e73;
+      font-size: clamp(1rem, 1.8vw, 1.22rem);
+      letter-spacing: -0.015em;
+      line-height: 1.5;
+      margin: 0 0 .55em;
+    }
+    .intro-sign {
+      color: #86868b;
+      font-size: .95rem;
+      margin-top: .9em;
     }
 
-    .note-text {
-      font-family: "Gochi Hand", "Comic Sans MS", cursive;
-      color: #141414;
-      font-size: clamp(.92rem, 2.3vw, 1.16rem);
-      line-height: 1.4;
-    }
-    .note-text .ttl {
-      display: block;
-      font-size: clamp(1.25rem, 3vw, 1.62rem);
-      margin-bottom: .35em;
-    }
-    .note-text p { margin: 0 0 .22em; }
-    .note-text .gl { display: block; margin-top: .55em; }
-    .note-text .ttl            { transform: rotate(-1.6deg); }
-    .note-text p:nth-of-type(1){ transform: rotate(.6deg);  margin-left: 2px; }
-    .note-text p:nth-of-type(2){ transform: rotate(-.8deg); margin-left: -3px; }
-    .note-text p:nth-of-type(3){ transform: rotate(.5deg);  margin-left: 4px; }
-    .note-text p:nth-of-type(4){ transform: rotate(-.5deg); margin-left: 1px; }
-    .note-text p:nth-of-type(5){ transform: rotate(1deg);   margin-left: -2px; }
-    .note-text .gl             { transform: rotate(-2.2deg); margin-left: 5px; }
-
-    /* Apple-style "check wallet" search */
+    /* "check wallet" — the iOS search pill */
     .check { position: relative; width: min(440px, 88vw); }
     .check-ic {
       position: absolute; left: 16px; top: 50%;
@@ -153,22 +116,18 @@
       color: #86868b; pointer-events: none;
     }
     .check-in {
-      width: 100%; height: 52px;
-      padding: 0 18px 0 46px;
+      width: 100%; height: 48px;
+      padding: 0 20px 0 44px;
       font: 400 clamp(1rem, 2vw, 1.1rem)/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
       color: #1d1d1f; letter-spacing: -0.01em;
-      background: #f5f5f7;
-      border: 1px solid #e3e3e8;
-      border-radius: 14px;
+      background: #e8e8ed;
+      border: none;
+      border-radius: 24px;
       outline: none;
-      transition: box-shadow .2s ease, border-color .2s ease, background .2s ease;
+      transition: background .2s ease;
     }
     .check-in::placeholder { color: #86868b; }
-    .check-in:focus {
-      background: #fff;
-      border-color: #0071e3;
-      box-shadow: 0 0 0 4px rgba(0,113,227,.16);
-    }
+    .check-in:focus { background: #e2e2e7; }
 
     /* "check wallet" result panel — Apple card */
     .check-result {
@@ -357,17 +316,11 @@
   <!-- Page 2 -->
   <section class="page page--note">
     <div class="note-stack">
-      <div class="sticky">
-        <div class="note-text">
-          <span class="ttl">this is coin pro max</span>
-          <p>it has everything and even more</p>
-          <p>you can get different rewards by achieving levels</p>
-          <p>to achieve any level complete the task assigned to it</p>
-          <p>its fully automated and you can track your</p>
-          <p>progress by checking ur wallet</p>
-          <span class="gl">good luck</span>
-          <span class="sig">- Milky</span>
-        </div>
+      <div class="intro">
+        <h2 class="intro-title">This is Coin Pro Max.</h2>
+        <p class="intro-body">It has everything and even more. You can get different rewards by achieving levels. To achieve any level, complete the task assigned to it.</p>
+        <p class="intro-body">It's fully automated. Track your progress by checking your wallet.</p>
+        <p class="intro-sign">Good luck. &nbsp;- Milky</p>
       </div>
 
       <div class="check">
