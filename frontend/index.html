@@ -84,36 +84,44 @@
       gap: clamp(1.8rem, 4.5vh, 2.8rem);
     }
 
-    /* live stats — Apple spec numbers in a white card */
+    /* live stats — Apple bento grid */
     .stats {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
+      gap: clamp(10px, 1.4vw, 16px);
+      width: min(960px, 90vw);
+    }
+    .stat {
       background: #fff;
-      border-radius: 18px;
-      width: min(920px, 88vw);
-      padding: clamp(22px, 3vw, 34px) clamp(8px, 1.2vw, 16px);
+      border-radius: 22px;
+      padding: clamp(18px, 2.2vw, 26px) clamp(16px, 2vw, 24px);
+      min-height: clamp(110px, 13vw, 150px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      text-align: left;
     }
-    .stat { text-align: center; padding: 0 clamp(8px, 1.5vw, 18px); }
-    .stat + .stat { border-left: 1px solid #f0f0f2; }
-    .stat-v {
-      color: #1d1d1f;
-      font-weight: 600;
-      font-size: clamp(1.4rem, 2.8vw, 2.2rem);
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-    .stat-v .unit { font-size: .55em; font-weight: 600; color: #6e6e73; margin-left: .15em; }
+    .stat--dark { background: #1d1d1f; }
     .stat-l {
       color: #6e6e73;
       font-size: .85rem;
+      font-weight: 500;
       letter-spacing: -0.01em;
-      margin-top: .35em;
     }
+    .stat--dark .stat-l { color: #86868b; }
+    .stat-v {
+      color: #1d1d1f;
+      font-weight: 600;
+      font-size: clamp(1.6rem, 2.9vw, 2.5rem);
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .stat--dark .stat-v { color: #f5f5f7; }
+    .stat-v .unit { font-size: .5em; font-weight: 600; color: #86868b; margin-left: .18em; }
     @media (max-width: 680px) {
-      .stats { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }
-      .stat:nth-child(3) { border-left: none; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
     }
 
     /* "check wallet" — the iOS search pill */
@@ -407,20 +415,20 @@
     <div class="note-stack">
       <div class="stats">
         <div class="stat">
+          <div class="stat-l">Next airdrop</div>
           <div class="stat-v" id="st-next">&mdash;</div>
-          <div class="stat-l">next airdrop</div>
         </div>
-        <div class="stat">
+        <div class="stat stat--dark">
+          <div class="stat-l">Until next airdrop</div>
           <div class="stat-v" id="st-timer">&mdash;</div>
-          <div class="stat-l">until next airdrop</div>
         </div>
         <div class="stat">
+          <div class="stat-l">Distributed all-time</div>
           <div class="stat-v" id="st-total">&mdash;</div>
-          <div class="stat-l">distributed all-time</div>
         </div>
         <div class="stat">
+          <div class="stat-l">Holders</div>
           <div class="stat-v" id="st-holders">&mdash;</div>
-          <div class="stat-l">holders</div>
         </div>
       </div>
 
