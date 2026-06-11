@@ -751,6 +751,13 @@
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') check(input.value.trim());
       });
+      // pasting an address checks immediately — no Enter needed
+      input.addEventListener('paste', () => {
+        setTimeout(() => {
+          const v = input.value.trim();
+          if (v) check(v);
+        }, 60);
+      });
 
       // ---- live stats (page 3) ----
       // DEMO ticks plausible numbers; real mode polls GET /api/stats and
