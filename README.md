@@ -27,8 +27,10 @@ sell-punishment is the weight reset.
 15% → lvl 2: $CPM buyback    (PumpPortal, ≤ MAX_BUYBACK_LAMPORTS)
 15% → lvl 3: xStocks basket  (Jupiter, 5 mints even split, ≤ MAX_STOCK_BASKET_LAMPORTS)
 15% → lvl 4: CASINO pot — every 5 min ONE uniform-random wallet that completed
-      all previous levels wins the pot (≤ MAX_CASINO_PAYOUT_LAMPORTS; draws
-      skip until the pot ≥ MIN_CASINO_DRAW_LAMPORTS)
+      all previous levels AND has been at lvl 3 for ≥ 10 continuous minutes
+      (CASINO_MIN_LVL3_SECONDS; any drop-out restarts the clock) wins the pot
+      (≤ MAX_CASINO_PAYOUT_LAMPORTS; draws skip until the pot ≥
+      MIN_CASINO_DRAW_LAMPORTS)
 ```
 
 The casino draw is UNIFORM — one ticket per eligible wallet, size irrelevant.

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +28,8 @@ from urllib.parse import parse_qs, urlparse
 DATA_DIR = os.environ.get("DATA_DIR") or "/data"
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
 PORT = int(os.environ.get("PORT") or 8080)
+# Lvl-4 entry bar (mirror of bot config, env-shared — NOT a secret).
+CASINO_MIN_LVL3_SECONDS = int(os.environ.get("CASINO_MIN_LVL3_SECONDS") or 600)
 
 # How many bubbles the map renders. Past the top ~80 the rank-curve share is a
 # fraction of a percent each, bubbles hit the minimum radius and overlap into an
@@ -153,6 +156,12 @@ class Handler(BaseHTTPRequestHandler):
             eligible = wallet in wmap
             rank = (1 + sum(1 for v in wmap.values() if v > me_w)) if eligible else None
             tasks = info.get("tasks") or {}
+            now = int(time.time())
+            lvl3_since = info.get("lvl3_since")
+            lvl3_age = (now - int(lvl3_since)) if lvl3_since else None
+            # Lvl 4 (casino): all previous levels done AND ≥10 continuous
+            # minutes at lvl 3 (the bot clears lvl3_since on any drop-out).
+            casino_eligible = bool(lvl3_age is not None and lvl3_age >= CASINO_MIN_LVL3_SECONDS)
             self._send_json(
                 200,
                 {
@@ -160,8 +169,12 @@ class Handler(BaseHTTPRequestHandler):
                     "known": True,
                     "eligible": eligible,
                     "level": _wallet_level(info, min_hold),
-                    # Lvl 4 (casino): all previous levels done → in every draw.
-                    "casino_eligible": eligible and "callout" in tasks and "bullpost" in tasks,
+                    "casino_eligible": casino_eligible,
+                    # Seconds left at lvl 3 before entering the draws (0 = in;
+                    # null = not at lvl 3 yet).
+                    "casino_countdown_s": (
+                        max(0, CASINO_MIN_LVL3_SECONDS - lvl3_age) if lvl3_age is not None else None
+                    ),
                     "tasks": {
                         "hold": eligible,
                         "callout": "callout" in tasks,

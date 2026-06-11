@@ -216,16 +216,42 @@ def task_weights(state: dict[str, dict], task: str) -> dict[str, int]:
     }
 
 
-def casino_weights(state: dict[str, dict]) -> dict[str, int]:
-    """Lvl-4 (casino) candidates: eligible holders that completed ALL previous
-    levels — holding (weight > 0) AND callout AND bullpost. The draw itself is
-    UNIFORM (one ticket per wallet); the held×balance values are returned only
-    for consistency with the other weight sets (stats etc.)."""
+def stamp_lvl3(state: dict[str, dict], *, now: int | None = None) -> dict[str, dict]:
+    """Track WHEN each wallet reached lvl 3 (eligible holder + callout +
+    bullpost). `lvl3_since` is set on the first tick all three hold and CLEARED
+    the moment the wallet drops out (sell / below floor) — so the lvl-4 waiting
+    clock restarts from zero on re-entry. Must run every tick, AFTER the task
+    flags are applied and BEFORE the state is persisted."""
+    t = now if now is not None else _now()
+    for info in state.values():
+        held = int(info.get("held_seconds", 0))
+        bal = int(info.get("last_balance", 0))
+        tasks = info.get("tasks") or {}
+        is_lvl3 = held > 0 and bal >= config.MIN_HOLDING_RAW and "callout" in tasks and "bullpost" in tasks
+        if is_lvl3:
+            info.setdefault("lvl3_since", t)
+        else:
+            info.pop("lvl3_since", None)
+    return state
+
+
+def casino_weights(state: dict[str, dict], *, now: int | None = None) -> dict[str, int]:
+    """Lvl-4 (casino) candidates: wallets that completed ALL previous levels
+    AND have held lvl 3 continuously for ≥ CASINO_MIN_LVL3_SECONDS (10 min =
+    two casino cycles by default). The draw itself is UNIFORM (one ticket per
+    wallet); the held×balance values are returned only for consistency with
+    the other weight sets (stats etc.)."""
+    t = now if now is not None else _now()
     out: dict[str, int] = {}
     for w, v in weighted_holdings(state).items():
-        tasks = state.get(w, {}).get("tasks") or {}
-        if "callout" in tasks and "bullpost" in tasks:
-            out[w] = v
+        info = state.get(w, {})
+        tasks = info.get("tasks") or {}
+        if "callout" not in tasks or "bullpost" not in tasks:
+            continue
+        since = info.get("lvl3_since")
+        if since is None or t - int(since) < config.CASINO_MIN_LVL3_SECONDS:
+            continue  # not yet matured into lvl 4
+        out[w] = v
     return out
 
 

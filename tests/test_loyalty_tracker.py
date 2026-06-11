@@ -239,6 +239,52 @@ class TestTasks(unittest.TestCase):
         self.assertEqual(lt.level_of(state["alice"]), 3)
 
 
+class TestLvl3Clock(unittest.TestCase):
+    """Lvl-4 entry: 10 continuous minutes at lvl 3. stamp_lvl3 sets the clock
+    the first tick a wallet is lvl 3 and clears it the moment it drops out."""
+
+    def _lvl3_state(self, ts0=1000):
+        state = {}
+        lt.update(state, {"alice": 100}, now=ts0)
+        lt.update(state, {"alice": 100}, now=ts0 + 100)   # eligible, accrued
+        lt.apply_task(state, {"alice"}, "callout", now=ts0 + 100)
+        lt.apply_task(state, {"alice"}, "bullpost", now=ts0 + 100)
+        return state
+
+    def test_stamp_set_once_and_kept(self):
+        state = self._lvl3_state()
+        lt.stamp_lvl3(state, now=1100)
+        self.assertEqual(state["alice"]["lvl3_since"], 1100)
+        lt.stamp_lvl3(state, now=1200)                     # later tick: not overwritten
+        self.assertEqual(state["alice"]["lvl3_since"], 1100)
+
+    def test_sell_clears_the_clock_and_restarts(self):
+        state = self._lvl3_state()
+        lt.stamp_lvl3(state, now=1100)
+        lt.update(state, {"alice": 50}, now=1200)          # sell → reset held
+        lt.stamp_lvl3(state, now=1200)
+        self.assertNotIn("lvl3_since", state["alice"])     # clock cleared
+        lt.update(state, {"alice": 50}, now=1300)          # re-accrues (tasks sticky)
+        lt.stamp_lvl3(state, now=1300)
+        self.assertEqual(state["alice"]["lvl3_since"], 1300)  # restarted from zero
+
+    def test_casino_weights_require_maturity(self):
+        state = self._lvl3_state()
+        lt.stamp_lvl3(state, now=1100)
+        with mock.patch.object(lt.config, "CASINO_MIN_LVL3_SECONDS", 600):
+            self.assertEqual(lt.casino_weights(state, now=1100 + 599), {})        # 1s early
+            self.assertEqual(set(lt.casino_weights(state, now=1100 + 600)), {"alice"})  # matured
+
+    def test_incomplete_tasks_never_stamped(self):
+        state = {}
+        lt.update(state, {"bob": 100}, now=1000)
+        lt.update(state, {"bob": 100}, now=1100)
+        lt.apply_task(state, {"bob"}, "callout", now=1100)  # missing bullpost
+        lt.stamp_lvl3(state, now=1100)
+        self.assertNotIn("lvl3_since", state["bob"])
+        self.assertEqual(lt.casino_weights(state, now=99999), {})
+
+
 class TestCpmMechanics(unittest.TestCase):
     """CPM: any sell -> full reset of accumulated time, NO permanent flag;
     payout weight = held_seconds x balance."""

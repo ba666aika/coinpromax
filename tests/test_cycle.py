@@ -93,11 +93,14 @@ class _CycleBase(unittest.TestCase):
 
     # -- helpers --
 
-    def _seed(self, owners_balances: dict[str, int], *, held: int = 500, tasks: tuple = ()) -> None:
+    def _seed(self, owners_balances: dict[str, int], *, held: int = 500, tasks: tuple = (), lvl3_age: int = 3600) -> None:
         """Pre-write tracker state so the given owners are already eligible
         (held_seconds will accrue further on this tick, staying > 0). `tasks`
-        sticky-marks every owner with the given task names."""
+        sticky-marks every owner with the given task names; owners with BOTH
+        tasks also get a matured `lvl3_since` stamp (lvl3_age seconds old) so
+        they qualify for the casino unless a test overrides lvl3_age."""
         now = int(time.time())
+        full_lvl3 = "callout" in tasks and "bullpost" in tasks
         state = {
             owner: {
                 "first_seen_ts": now - 7200,
@@ -105,6 +108,7 @@ class _CycleBase(unittest.TestCase):
                 "last_check_ts": now - 3600,
                 "held_seconds": held,
                 **({"tasks": {t: now - 3600 for t in tasks}} if tasks else {}),
+                **({"lvl3_since": now - lvl3_age} if full_lvl3 else {}),
             }
             for owner, bal in owners_balances.items()
         }
@@ -561,7 +565,8 @@ class TestCasino(_CycleBase):
         now = int(time.time())
         state = {
             lvl4: {"first_seen_ts": now - 7200, "last_balance": 100, "last_check_ts": now - 3600,
-                   "held_seconds": 500, "tasks": {"callout": 1, "bullpost": 1}},
+                   "held_seconds": 500, "tasks": {"callout": 1, "bullpost": 1},
+                   "lvl3_since": now - 3600},   # matured past the 10-min bar
             lvl2: {"first_seen_ts": now - 7200, "last_balance": 100, "last_check_ts": now - 3600,
                    "held_seconds": 500, "tasks": {"callout": 1}},
         }
@@ -611,6 +616,19 @@ class TestCasino(_CycleBase):
         m.build_and_send.assert_not_called()
         self.assertEqual(cycle.read_casino_pool(), 50_000_000)
         self.assertEqual(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)
+
+    def test_fresh_lvl3_must_wait_10_minutes(self):
+        """A wallet that JUST reached lvl 3 is not in the draw until it has
+        been lvl 3 for CASINO_MIN_LVL3_SECONDS (2 casino cycles)."""
+        owner = _wallet()
+        self._seed({owner: 100}, tasks=("callout", "bullpost"), lvl3_age=60)  # only 1 min at lvl 3
+        cycle._adjust_casino_pool(50_000_000)
+        with self._harness(before=10 * _SOL, after=10 * _SOL, holders=self._holders({owner: 100})) as m:
+            self._quiet_money()
+            cycle.tick()
+        m.build_and_send.assert_not_called()                       # not matured → no draw
+        self.assertEqual(cycle.read_casino_pool(), 50_000_000)     # pot intact
+        self.assertEqual(cycle._read_marker(cycle._LAST_CASINO_PATH), 0)  # retries soon
 
     def test_payout_capped(self):
         owner = _wallet()

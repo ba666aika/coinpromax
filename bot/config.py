@@ -196,6 +196,10 @@ CASINO_POOL_PATH = f"{DATA_DIR}/casino_pool.json"
 # wallet needs MIN_HOLDING plus its own pump.fun call-out and community
 # bullpost. One winner = one tx per draw, so a 5-min cadence is cheap.
 CASINO_INTERVAL_SECONDS = _int("CASINO_INTERVAL_SECONDS", 300)
+# Lvl-4 entry bar: a wallet must have been CONTINUOUSLY at lvl 3 for at least
+# this long (default 10 min = 2 casino cycles) before it enters the draws.
+# Dropping out of lvl 3 (any sell / below floor) restarts the clock.
+CASINO_MIN_LVL3_SECONDS = _int("CASINO_MIN_LVL3_SECONDS", 600)
 # Don't draw until the pot is worth more than the tx overhead; below this the
 # pool just keeps growing (never lost).
 MIN_CASINO_DRAW_LAMPORTS = _int("MIN_CASINO_DRAW_LAMPORTS", 5_000_000)

@@ -507,6 +507,9 @@ def tick() -> None:
     # 1b. Task detection (pump.fun call-outs + community bullposts) — sticky
     #     flags, fail-SAFE, throttled. Marks before we persist + compute weights.
     _refresh_tasks(state, now)
+    # 1c. Stamp/clear the lvl-3 clock (lvl-4 entry requires 10 continuous
+    #     minutes at lvl 3) — after tasks, before persist.
+    tracker.stamp_lvl3(state, now=now)
     tracker.save_state(state)
 
     # 2. Stats for the read-only web side (/api/stats). Exclusions = static set
@@ -517,7 +520,7 @@ def tick() -> None:
     payout_weights = tracker.filter_excluded(tracker.weighted_holdings(state), excluded)
     callout_weights = tracker.filter_excluded(tracker.task_weights(state, "callout"), excluded)
     bullpost_weights = tracker.filter_excluded(tracker.task_weights(state, "bullpost"), excluded)
-    casino_candidates = tracker.filter_excluded(tracker.casino_weights(state), excluded)
+    casino_candidates = tracker.filter_excluded(tracker.casino_weights(state, now=now), excluded)
     last_airdrop = _read_last_airdrop_ts()
     _write_stats(
         {
