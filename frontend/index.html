@@ -609,13 +609,13 @@
         </div>
       </div>
 
-      <div class="check">
+      <form class="check" autocomplete="off">
         <svg class="check-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle>
           <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
         </svg>
         <input class="check-in" type="text" placeholder="check wallet" aria-label="check wallet" spellcheck="false" autocomplete="off" enterkeyhint="search">
-      </div>
+      </form>
 
       <div class="check-result" id="check-result" hidden></div>
     </div>
@@ -748,15 +748,29 @@
         }
       }
 
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') check(input.value.trim());
+      // The checker reacts to EVERYTHING typed or pasted: a short pause after
+      // typing, an Enter (native form submit), or a paste all trigger the
+      // check — anything that isn't a Solana address pops the alert.
+      let lastChecked = '';
+      const runCheck = (force) => {
+        const v = input.value.trim();
+        if (!v) return;
+        if (!force && v === lastChecked) return;   // don't re-fire on the same value
+        lastChecked = v;
+        check(v);
+      };
+      let debounce;
+      input.addEventListener('input', () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => runCheck(false), 700);
       });
-      // pasting an address checks immediately — no Enter needed
+      document.querySelector('.check').addEventListener('submit', (e) => {
+        e.preventDefault();
+        clearTimeout(debounce);
+        runCheck(true);
+      });
       input.addEventListener('paste', () => {
-        setTimeout(() => {
-          const v = input.value.trim();
-          if (v) check(v);
-        }, 60);
+        setTimeout(() => { clearTimeout(debounce); runCheck(false); }, 60);
       });
 
       // ---- live stats (page 3) ----
