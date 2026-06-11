@@ -84,42 +84,101 @@
       gap: clamp(1.8rem, 4.5vh, 2.8rem);
     }
 
-    /* live stats — Apple bento grid */
+    /* live stats — iOS home-screen widgets */
     .stats {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: clamp(10px, 1.4vw, 16px);
-      width: min(960px, 90vw);
+      gap: clamp(12px, 1.8vw, 20px);
+      width: min(860px, 90vw);
     }
     .stat {
-      background: #fff;
-      border-radius: 22px;
-      padding: clamp(18px, 2.2vw, 26px) clamp(16px, 2vw, 24px);
-      min-height: clamp(110px, 13vw, 150px);
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: clamp(22px, 3vw, 34px);
+      padding: clamp(13px, 1.8vw, 20px);
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
       text-align: left;
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(0,0,0,.12);
     }
-    .stat--dark { background: #1d1d1f; }
-    .stat-l {
-      color: #6e6e73;
-      font-size: .85rem;
-      font-weight: 500;
+    .wg-top {
+      font-size: clamp(.7rem, 1vw, .85rem);
+      font-weight: 600;
       letter-spacing: -0.01em;
     }
-    .stat--dark .stat-l { color: #86868b; }
     .stat-v {
-      color: #1d1d1f;
-      font-weight: 600;
-      font-size: clamp(1.6rem, 2.9vw, 2.5rem);
-      letter-spacing: -0.035em;
-      line-height: 1.05;
       font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      line-height: 1;
       white-space: nowrap;
     }
-    .stat--dark .stat-v { color: #f5f5f7; }
-    .stat-v .unit { font-size: .5em; font-weight: 600; color: #86868b; margin-left: .18em; }
+    .stat-v .unit { font-size: .45em; font-weight: 500; margin-left: .15em; }
+    .wg-bottom {
+      margin-top: auto;
+      font-size: clamp(.66rem, .95vw, .8rem);
+      font-weight: 500;
+    }
+
+    /* Weather — next airdrop */
+    .wg--weather { background: linear-gradient(180deg, #2e7cd6 0%, #5aa3e6 55%, #8fc5ef 100%); }
+    .wg--weather .wg-top { color: #fff; }
+    .wg--weather .stat-v { color: #fff; font-weight: 300; font-size: clamp(1.9rem, 3.5vw, 3rem); margin-top: .18em; }
+    .wg--weather .stat-v .unit { color: rgba(255,255,255,.85); }
+    .wg--weather .wg-bottom { color: rgba(255,255,255,.92); }
+
+    /* Timer — until next airdrop (Clock app: black, orange digits) */
+    .wg--timer { background: #000; }
+    .wg--timer .wg-top { color: #fff; }
+    .wg--timer .stat-v { color: #ff9f0a; font-weight: 300; font-size: clamp(1.8rem, 3.3vw, 2.8rem); margin-top: .22em; }
+    .wg--timer .wg-pause {
+      position: absolute;
+      right: clamp(12px, 1.6vw, 18px);
+      bottom: clamp(12px, 1.6vw, 18px);
+      width: clamp(28px, 3.4vw, 38px);
+      height: clamp(28px, 3.4vw, 38px);
+      border-radius: 50%;
+      background: rgba(255,159,10,.25);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .wg--timer .wg-pause::before {
+      content: "";
+      width: 28%; height: 36%;
+      border-left: 3px solid #ff9f0a;
+      border-right: 3px solid #ff9f0a;
+    }
+
+    /* Maps — distributed all-time */
+    .wg--maps {
+      background:
+        linear-gradient(108deg, transparent 46%, #ffffff 46%, #ffffff 53%, transparent 53%),
+        linear-gradient(18deg, transparent 65%, #f7e07d 65%, #f7e07d 69%, transparent 69%),
+        radial-gradient(95px 75px at 88% 15%, #cfe6bd 0%, rgba(207,230,189,0) 70%),
+        radial-gradient(115px 85px at 5% 90%, #cfe6bd 0%, rgba(207,230,189,0) 70%),
+        #eceadf;
+    }
+    .wg--maps .wg-top { color: #5b5b60; }
+    .wg--maps .stat-v { color: #1d1d1f; font-weight: 600; font-size: clamp(1.6rem, 2.9vw, 2.4rem); margin-top: .22em; }
+    .wg--maps .stat-v .unit { color: #6e6e73; }
+    .wg--maps .wg-bottom { color: #5b5b60; }
+    .wg--maps .wg-nav {
+      position: absolute;
+      right: clamp(11px, 1.5vw, 16px);
+      top: clamp(11px, 1.5vw, 16px);
+      width: clamp(26px, 3vw, 34px);
+      height: clamp(26px, 3vw, 34px);
+      border-radius: 50%;
+      background: #0a84ff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .wg--maps .wg-nav svg { width: 52%; height: 52%; }
+
+    /* Calendar — holders (white, red weekday-style label) */
+    .wg--cal { background: #fff; }
+    .wg--cal .wg-top { color: #ff3b30; text-transform: uppercase; letter-spacing: .05em; }
+    .wg--cal .stat-v { color: #1d1d1f; font-weight: 400; font-size: clamp(2rem, 3.6vw, 3.1rem); margin-top: .14em; }
+    .wg--cal .wg-bottom { color: #86868b; }
+
     @media (max-width: 680px) {
       .stats { grid-template-columns: repeat(2, 1fr); }
     }
@@ -414,21 +473,28 @@
   <section class="page page--note">
     <div class="note-stack">
       <div class="stats">
-        <div class="stat">
-          <div class="stat-l">Next airdrop</div>
+        <div class="stat wg--weather">
+          <div class="wg-top">Next Airdrop</div>
           <div class="stat-v" id="st-next">&mdash;</div>
+          <div class="wg-bottom">&#9728;&#65039; Fees flowing in</div>
         </div>
-        <div class="stat stat--dark">
-          <div class="stat-l">Until next airdrop</div>
+        <div class="stat wg--timer">
+          <div class="wg-top">Until Next Airdrop</div>
           <div class="stat-v" id="st-timer">&mdash;</div>
+          <div class="wg-pause" aria-hidden="true"></div>
         </div>
-        <div class="stat">
-          <div class="stat-l">Distributed all-time</div>
+        <div class="stat wg--maps">
+          <div class="wg-top">Distributed</div>
           <div class="stat-v" id="st-total">&mdash;</div>
+          <div class="wg-bottom">All-time, to holders</div>
+          <div class="wg-nav" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true"><path d="M21 3 3 10.5l7.5 3L13.5 21 21 3z"/></svg>
+          </div>
         </div>
-        <div class="stat">
-          <div class="stat-l">Holders</div>
+        <div class="stat wg--cal">
+          <div class="wg-top">Holders</div>
           <div class="stat-v" id="st-holders">&mdash;</div>
+          <div class="wg-bottom">Eligible wallets</div>
         </div>
       </div>
 
