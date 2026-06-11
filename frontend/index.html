@@ -397,7 +397,7 @@
         </div>
         <div class="lv-block">
           <div class="lv-label">Reward</div>
-          <p class="lv-reward">Every 5 minutes <strong>one random wallet that has held Lvl&nbsp;3 for 10+ minutes wins the casino pot</strong> — 15% of all fees</p>
+          <p class="lv-reward"><span class="plus">Everything in Coin Pro Max, plus</span><br><strong>the casino pot</strong> — one winner every 5 minutes</p>
         </div>
       </div>
     </div>
@@ -412,9 +412,32 @@
   <script>
     (() => {
       // ---- wallet checker (read-only: GET /api/wallet) ----
+      // DEMO: until launch there is no live engine behind the site, so every
+      // check returns RANDOM plausible data to show how the checker behaves.
+      // Flip to false at launch — the real /api/wallet path below is intact.
+      const DEMO = true;
+
       const input = document.querySelector('.check-in');
       const box = document.getElementById('check-result');
       const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+      const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+      function demoData() {
+        const lvl = rnd(0, 4);
+        if (lvl === 0) return { known: false };
+        const d = {
+          known: true,
+          eligible: true,
+          level: Math.min(lvl, 3),
+          casino_eligible: lvl === 4,
+          casino_countdown_s: lvl === 4 ? 0 : (lvl === 3 ? rnd(5, 599) : null),
+          tasks: { hold: true, callout: lvl >= 2, bullpost: lvl >= 3 },
+          held_seconds: rnd(90, 3 * 86400),
+          share_bps: rnd(3, 900),
+          rank: rnd(1, 420),
+        };
+        return d;
+      }
 
       const fmtHeld = (s) => {
         if (s >= 86400) return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
@@ -463,6 +486,10 @@
           return;
         }
         show('<div class="cr-note">checking&hellip;</div>');
+        if (DEMO) {
+          setTimeout(() => render(demoData()), 350 + Math.random() * 400);
+          return;
+        }
         try {
           const r = await fetch('/api/wallet?wallet=' + encodeURIComponent(addr));
           if (!r.ok) throw new Error('http ' + r.status);
