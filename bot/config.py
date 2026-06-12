@@ -12,7 +12,9 @@ from solders.pubkey import Pubkey
 
 
 def _require(name: str) -> str:
-    v = os.environ.get(name)
+    # .strip(): values pasted into Railway often carry a trailing newline,
+    # which poisons URLs/headers built from them (httpx rejects \n outright).
+    v = (os.environ.get(name) or "").strip()
     if not v:
         print(f"[config] FATAL: missing required env {name}", file=sys.stderr)
         sys.exit(2)
@@ -20,7 +22,7 @@ def _require(name: str) -> str:
 
 
 def _opt(name: str, default: str) -> str:
-    return os.environ.get(name) or default
+    return (os.environ.get(name) or default).strip()
 
 
 def _int(name: str, default: int) -> int:
@@ -216,8 +218,8 @@ MAX_CASINO_PAYOUT_LAMPORTS = _int("MAX_CASINO_PAYOUT_LAMPORTS", 5_000_000_000)
 # Server key + secret (cck_… / ccs_…) from admin.coincommunities.org → sent as the
 # x-server-key / x-server-secret headers. BOTH are SECRETS — Railway Variables only.
 COINCOMMUNITIES_API_BASE = _opt("COINCOMMUNITIES_API_BASE", "https://api.coin-communities.xyz")
-COINCOMMUNITIES_API_KEY = os.environ.get("COINCOMMUNITIES_API_KEY") or ""
-COINCOMMUNITIES_API_SECRET = os.environ.get("COINCOMMUNITIES_API_SECRET") or ""
+COINCOMMUNITIES_API_KEY = (os.environ.get("COINCOMMUNITIES_API_KEY") or "").strip()
+COINCOMMUNITIES_API_SECRET = (os.environ.get("COINCOMMUNITIES_API_SECRET") or "").strip()
 # How often to re-pull task sets from the external APIs (seconds). The local
 # allowlist files are read every tick regardless; only network calls throttle.
 TASKS_REFRESH_SECONDS = _int("TASKS_REFRESH_SECONDS", 300)
