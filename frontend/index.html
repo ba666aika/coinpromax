@@ -45,6 +45,22 @@
       transform: translateY(14px);
       animation: rise 1.1s cubic-bezier(.16,1,.3,1) .05s forwards;
     }
+    .ca {
+      margin-top: -.4rem;
+      color: #86868b;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: clamp(.68rem, 1.2vw, .85rem);
+      letter-spacing: .01em;
+      cursor: pointer;
+      transition: color .2s ease;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: rise 1.1s cubic-bezier(.16,1,.3,1) .35s forwards;
+      max-width: 92vw;
+      overflow-wrap: anywhere;
+      text-align: center;
+    }
+    .ca:hover { color: #1d1d1f; }
     .wordmark {
       color: #1d1d1f;
       font-weight: 600;
@@ -492,6 +508,7 @@
   <section class="page page--apple">
     <img class="coin-img" src="assets/coin.jpg" alt="Coin Pro Max">
     <h1 class="wordmark">Coin Pro Max</h1>
+    <div class="ca" id="ca" title="Click to copy">4z7QK2yqoB3kBN9Tb2b5eP8TzCP1EEar1vRmkiijpump</div>
     <div class="scroll-cue">
       <span>scroll</span>
       <span class="chev"></span>
@@ -850,6 +867,18 @@
         setInterval(() => {
           st.timer.textContent = dropAt ? fmtTimer(dropAt - Date.now() / 1000) : '00:00';
         }, 1000);
+      }
+
+      // ---- CA: click to copy ----
+      const ca = document.getElementById('ca');
+      if (ca) {
+        const addr = ca.textContent.trim();
+        ca.addEventListener('click', () => {
+          navigator.clipboard.writeText(addr).then(() => {
+            ca.textContent = 'Copied';
+            setTimeout(() => { ca.textContent = addr; }, 900);
+          });
+        });
       }
 
       // ---- level cards: black outline follows the click ----
