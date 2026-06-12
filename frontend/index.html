@@ -651,10 +651,9 @@
   <script>
     (() => {
       // ---- wallet checker (read-only: GET /api/wallet) ----
-      // DEMO: until launch there is no live engine behind the site, so every
-      // check returns RANDOM plausible data to show how the checker behaves.
-      // Flip to false at launch — the real /api/wallet path below is intact.
-      const DEMO = true;
+      // DEMO=false: the site shows REAL engine data from /api/wallet and
+      // /api/stats. (true = random plausible data for pre-launch previews.)
+      const DEMO = false;
 
       const input = document.querySelector('.check-in');
       const box = document.getElementById('check-result');
