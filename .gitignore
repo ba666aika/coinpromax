@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.playwright-mcp/
+/data/
+.DS_Store
